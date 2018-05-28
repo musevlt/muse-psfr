@@ -10,7 +10,7 @@ d'onde avec un pixel scale de 0.2 arcsec.
 import matplotlib.pyplot as plt
 import numpy as np
 from math import gamma
-from numpy.fft import fft2, ifft2
+from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import griddata
 
 
@@ -74,8 +74,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # Step 0.4 : Paremetres numériques
     # ---------
     Dimpup = 40        # Taille de la pupille en pixel pour zone de correction
-    coefL0 = 1         # pour gerer les "L0 numériques"
-    dim1 = Dimpup * 2
+    # coefL0 = 1         # pour gerer les "L0 numériques"
 
     # Step 0.5 : Mise en oeuvre
     # ---------
@@ -117,31 +116,21 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # STEP 1 : Simulation des PSF LGS (tilt inclus)
     # ===============================================
     # cube de DSP pour chaque direction d'interet - ZONE DE CORRECTION ONLY
-    dsp = dsp4muse(Dpup, Dimpup, dim1, Cn2, h, L0, r0ref, recons_cn2,
+    dsp = dsp4muse(Dpup, Dimpup, Dimpup * 2, Cn2, h, L0, r0ref, recons_cn2,
                    recons_h, vent, arg_v, law, 1000, nsspup, nact, Fsamp,
                    delay, bruitLGS2, lambdaref, poslgs, dirperf,
                    verbose=verbose)
 
-    # Step 2: Calcul DSP fitting
-    # ------
-    dspa = eclat(psd_fit(dim, 2 * Dpup, r0ref, L0, fc))
+    # STEP 2: Calcul DSP fitting
+    # ===============================================
+    dspa = fftshift(psd_fit(dim, 2 * Dpup, r0ref, L0, fc))
     ns = dsp.shape[0]
     dspf = np.resize(dspa, (ns, dim, dim))
 
     # Finale
-    center = dim // 2
-    size = dim1 // 2
-    sl = slice(center - size, center + size)
+    sl = slice(dim // 2 - Dimpup, dim // 2 + Dimpup)
+    dspf[:, sl, sl] = np.maximum(dspa[sl, sl], fftshift(dsp, axes=(1, 2)))
 
-    # for i in range(ns):
-    #     # dspaw = crop(dspa, nc=dim1, centre=[dim / 2, dim / 2], silent=True)
-    #     dspaw = dspa[sl, sl].copy()
-    #     # dspf[i] = dspa
-    #     indice = eclat(dsp[i]) > dspaw
-    #     dspaw[indice] = eclat(dsp[i])[indice]
-    #     dspf[i, sl, sl] = np.maximum(dspa[sl, sl].copy(), eclat(dsp[i]))
-
-    dspf[:, sl, sl] = np.maximum(dspa[sl, sl], eclat(dsp))
     return dspf * (lambdaref * 1000. / (2. * np.pi)) ** 2
 
 
@@ -182,30 +171,6 @@ def seeing2r01(seeing, lbda, zenith):
     return r0
 
 
-def eclat(imag, inverse=False):
-    """eclate un tableau aux quatres coins
-
-    TODO: replace with numpy.fft.fftshift / numpy.fft.ifftshift
-    """
-    sens = 1 if inverse else -1
-    # to reproduce the same behavior as IDL, we need to compute "- (x//2)" and
-    # not "-x//2" as it does not round to the same integer.
-    if imag.ndim == 1:
-        nl = imag.shape[0]
-        gami = np.roll(imag, sens * (nl // 2))
-    elif imag.ndim == 2:
-        # image
-        nl, nc = imag.shape
-        gami = np.roll(imag, (sens * (nl // 2), sens * (nc // 2)), axis=(0, 1))
-    elif imag.ndim == 3:
-        # cube d'images
-        _, nl, nc = imag.shape
-        gami = np.roll(imag, (sens * (nl // 2), sens * (nc // 2)), axis=(1, 2))
-    else:
-        raise ValueError('ndim must be 1, 2 or 3')
-    return gami
-
-
 def pupil_mask(rt, width, oc=0, inverse=False):
     """Calcul du masque de la pupille d'un télescope.
 
@@ -224,14 +189,13 @@ def pupil_mask(rt, width, oc=0, inverse=False):
 
 def calc_var_from_psd(psd, pixsize, Dpup):
     # Decoupage de la DSP pour eagle
-    dim = psd.shape[0]
-    psdtemp = eclat(psd) * pixsize ** 2
+    psdtemp = fftshift(psd) * pixsize ** 2
 
     # Calcul de Fp
     FD = 1 / Dpup
     boxsize = FD / pixsize
 
-    mask = pupil_mask(boxsize / 2, dim, inverse=True)
+    mask = pupil_mask(boxsize / 2, psd.shape[0], inverse=True)
     return np.sum(psdtemp * mask)
 
 
@@ -779,7 +743,7 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
 
 def psd_fit(dim, L, r0, L0, fc):
     dim = int(dim)
-    fx, fy = eclat((np.mgrid[:dim, :dim] - (dim - 1) / 2) / L)
+    fx, fy = fftshift((np.mgrid[:dim, :dim] - (dim - 1) / 2) / L, axes=(1, 2))
     f = np.sqrt(fx ** 2 + fy ** 2)
 
     out = np.zeros_like(f)
@@ -809,7 +773,7 @@ def psf_muse(psd, lambdamuse, verbose=False):
     psfall = np.zeros((nl, dimpsf, dimpsf))
 
     for i in range(nl):
-        print('lambda {:.1f} done'.format(lambdamuse[i]))
+        print('lambda {:.1f}'.format(lambdamuse[i]))
         FoV = (lambdamuse[i] / (2 * D)) * dim / (4.85 * 1e3)   # = champ total
         npixc = int(round((dimpsf * pixcale /
                            (lambdamuse[i] / (2 * 8) / 4.85 / 1000)) / 2) * 2)
@@ -873,11 +837,11 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
 
     # from PSD to structure function
-    bg = ifft2(eclat(psd * convnm**2)) * psd.size / L**2
+    bg = ifft2(fftshift(psd * convnm**2)) * psd.size / L**2
 
     # creation of the structure function
     Dphi = np.real(2 * (bg[0, 0] - bg))
-    Dphi = eclat(Dphi)
+    Dphi = fftshift(Dphi)
 
     # Extraction of the pupil part of the structure function
 
@@ -904,8 +868,8 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
               'We recommmend to increase the PSD size')
 
     if verbose:
-        print('input sampling = {} ---  output sampling = {}'
-              ' --- max num sampling = '.format(sampin, sampout, sampnum))
+        print('input sampling: {}, output sampling: {}, max num sampling: {}'
+              .format(sampin, sampout, sampnum))
 
     # increasing the FoV PSF means oversampling the pupil
     FoVnum = (lbda / (sampnum * D)) * dim / (4.85 * 1.e-6)
@@ -936,7 +900,7 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
             phase_static_o = phase_static
 
     if verbose:
-        print('input FoV = {} ---  output FoV = {} ---  Num FoV = {}'
+        print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
               .format(FoV, FoVnum * dimover / dimnum, FoVnum))
 
     if FoV > 2 * FoVnum:
@@ -950,17 +914,17 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     tab[:npupover, :npupover] = pupover
 
     dlFTO = fft2(np.abs(ifft2(tab))**2)
-    dlFTO = eclat(np.abs(dlFTO) / pup.sum())
+    dlFTO = fftshift(np.abs(dlFTO) / pup.sum())
 
     # creation of A OTF
     aoFTO = np.exp(-Dphi2 / 2)
 
     # Computation of final OTF
     sysFTO = aoFTO * dlFTO
-    sysFTO = eclat(sysFTO)
+    sysFTO = fftshift(sysFTO)
 
     # Computation of final PSF
-    sysPSF = np.real(eclat(ifft2(sysFTO)))
+    sysPSF = np.real(fftshift(ifft2(sysFTO)))
     sysPSF /= sysPSF.sum()  # normalisation to 1
 
     # FIXME: remove this or add option to return these values?
