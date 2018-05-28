@@ -29,6 +29,8 @@ IDL> size(a, /dimensions)
 import matplotlib.pyplot as plt
 import numpy as np
 from math import gamma
+from numpy.fft import fft2, ifft2
+from scipy.interpolate import griddata
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -200,7 +202,10 @@ def seeing2r01(seeing, lbda, zenith):
 
 
 def eclat(imag, inverse=False):
-    """eclate un tableau aux quatres coins"""
+    """eclate un tableau aux quatres coins
+
+    TODO: replace with numpy.fft.fftshift / numpy.fft.ifftshift
+    """
     sens = 1 if inverse else -1
     # to reproduce the same behavior as IDL, we need to compute "- (x//2)" and
     # not "-x//2" as it does not round to the same integer.
@@ -220,6 +225,22 @@ def eclat(imag, inverse=False):
     return gami
 
 
+def polaire2(rt, width, oc=0, inverse=False):
+    """Calcul du masque de la pupille d'un télescope.
+
+    rt = rayon du télescope (en pixels)
+    largeur = taille du masque
+    oc = taux d'occultation centrale linéaire
+    """
+    center = (width - 1) / 2
+    x, y = np.mgrid[:width, :width] - center
+    rho = np.sqrt(x ** 2 + y ** 2) / rt
+    mask = ((rho < 1) & (rho >= oc))
+    if inverse:
+        mask = ~mask
+    return mask.astype(int)
+
+
 def calc_var_from_psd(psd, pixsize, Dpup):
     # Decoupage de la DSP pour eagle
     dim = psd.shape[0]
@@ -230,15 +251,9 @@ def calc_var_from_psd(psd, pixsize, Dpup):
     boxsize = FD / pixsize
 
     # mask de la pupille du telescope.
-    oc = 0  # taux d'occultation centrale linéaire
-    rt = boxsize / 2  # Rayon du Télescope (pixels)
-    center = (dim - 1) / 2
-    x, y = np.mgrid[:dim, :dim] - center
-    rho = np.sqrt(x ** 2 + y ** 2) / rt
-    mask = ~((rho < 1) & (rho >= oc))
+    mask = polaire2(boxsize / 2, dim, inverse=True)
 
-    psdtemp = psdtemp * mask.astype(int)
-    return np.sum(psdtemp)
+    return np.sum(psdtemp * mask)
 
 
 def calc_mat_rec_glao_finale_s(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
@@ -794,6 +809,182 @@ def psd_fit(dim, L, r0, L0, fc):
     return out
 
 
+def psf_muse(psd, lambdamuse):
+    if psd.ndim == 2:
+        ndir = 1
+        dim = psd.shape[0]
+    elif psd.ndim == 3:
+        ndir = psd.shape[0]
+        dim = psd.shape[1]
+
+    nl = lambdamuse.size
+
+    D = 8
+    samp = 2
+    pup = polaire2(dim / 4, dim / 2, oc=0.14)
+
+    dimpsf = 40
+    pixcale = 0.2
+    psfall = np.zeros((nl, dimpsf, dimpsf))
+
+    for i in range(nl):
+        print('lambda {:.1f} done'.format(lambdamuse[i]))
+        FoV = (lambdamuse[i] / (2 * D)) * dim / (4.85 * 1e3)   # = champ total
+        npixc = int(round((dimpsf * pixcale /
+                           (lambdamuse[i] / (2 * 8) / 4.85 / 1000)) / 2) * 2)
+        lbda = lambdamuse[i] * 1.e-9
+        if ndir != 1:
+            psf = np.zeros((ndir, npixc, npixc))
+            for j in range(ndir):
+                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda,
+                                         samp=samp, FoV=FoV),
+                              nc=npixc, mil=True)
+            psf = psf.mean(axis=0)
+        else:
+            psf = psd_to_psf(psd, pup, D, lbda, samp=samp, FoV=FoV)
+            # psf = crop(psf, nc=npixc, mil=True)
+            center = psf.shape[0] // 2
+            size = npixc // 2
+            sl = slice(center - size, center + size)
+            psf = psf[sl, sl]
+
+        psf /= psf.sum()
+        np.clip(psf, 0, None, out=psf)
+
+        # psfall[i] = interpolate(psf, x, x, grid=True)
+        x, y = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
+        posin = np.mgrid[:npixc, :npixc].reshape(2, -1).T
+        psfall[i] = griddata(posin, psf.ravel(), (x, y), method='linear')
+        psfall[i] = psfall[i] / psfall[i].sum()
+
+    return psfall
+
+
+def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
+               verbose=False):
+    """Computation of a PSF from a residual phase PSD and a pupil shape.
+
+    Programme pour prendre en compte la multi-analyse les geometries
+    d'etoiles et la postion de la galaxie.
+
+    FUNCTION psd_to_psf, dsp, pup, local_L, osamp
+
+    PSD: 2D array with PSD values (in nm² per freq² at the PSF wavelength)
+    pup: 2D array representing the pupill
+    Samp: final PSF sampling (number of pixel in the diffraction). Min = 2 !
+    FoV  : PSF FoV (in arcsec)
+    lbda : PSF wavelength in m
+    D = pupil diameter
+    phase_static in nm
+
+    """
+    dim = psd.shape[0]
+    npup = pup.shape[0]
+    sampnum = dim / npup  # numerical sampling related to PSD vs pup dimension
+    L = D * sampnum       # Physical size of the PSD
+
+    if dim < 2 * npup:
+        print("the PSd horizon must at least two time larger than the "
+              "pupil diameter")
+
+    convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
+
+    # from PSD to structure function
+    bg = ifft2(eclat(psd * convnm**2)) * psd.size / L**2
+
+    # creation of the structure function
+    Dphi = np.real(2 * (bg[0, 0] - bg))
+    Dphi = eclat(Dphi)
+
+    # Extraction of the pupil part of the structure function
+
+    sampin = samp if samp is not None else sampnum
+
+    if samp < 2:
+        print('PSF should be at least nyquist sampled')
+
+    # even dimension of the num psd
+    dimnum = int(np.fix(dim * (sampin / sampnum) / 2)) * 2
+    sampout = dimnum / npup  # real sampling
+
+    if samp <= sampnum:
+        ns = sampout * npup / 2
+        sl = slice(int(dim / 2 - ns), int(dim / 2 + ns))
+        Dphi2 = Dphi[sl, sl]
+    else:
+        Dphi2 = np.zeros(dimnum, dimnum) + (
+            Dphi[0, 0] + Dphi[dim - 1, dim - 1] +
+            Dphi[0, dim - 1] + Dphi[dim - 1, 0]) / 4
+        sl = slice(int(dimnum / 2 - dim / 2), int(dimnum / 2 + dim / 2))
+        Dphi2[sl, sl] = Dphi
+        print('WARNING : Samplig > Dim DSP / Dim pup => extrapolation !!! '
+              'We recommmend to increase the PSD size')
+
+    if verbose:
+        print('input sampling = {} ---  output sampling = {}'
+              ' --- max num sampling = '.format(sampin, sampout, sampnum))
+
+    # increasing the FoV PSF means oversampling the pupil
+    FoVnum = (lbda / (sampnum * D)) * dim / (4.85 * 1.e-6)
+    if FoV is None:
+        FoV = FoVnum
+    overFoV = FoV / FoVnum
+
+    if not np.allclose(FoV, FoVnum):
+        dimover = int(np.fix(dimnum * overFoV / 2)) * 2
+        npupover = int(np.fix(npup * overFoV / 2)) * 2
+        xxover = np.arange(dimover) / dimover * dimnum
+        xxpupover = np.arange(npupover) / npupover * npup
+        Dphi2 = interpolate(Dphi2, xxover, xxover, cubic=True, grid=True) > 0
+        pupover = interpolate(pup, xxpupover, xxpupover, cubic=True, grid=True) > 0
+    else:
+        dimover = dimnum
+        npupover = npup
+        pupover = pup
+
+    if phase_static is not None:
+        npups = phase_static.shape[0]
+        if npups != npup:
+            print("pup and static phase must have the same number of pixels")
+        if not np.allclose(FoV, FoVnum):
+            phase_static_o = interpolate(phase_static, xxpupover, xxpupover,
+                                         cubic=True, grid=True) > 0
+        else:
+            phase_static_o = phase_static
+
+    if verbose:
+        print('input FoV = {} ---  output FoV = {} ---  Num FoV = {}'
+              .format(FoV, FoVnum * dimover / dimnum, FoVnum))
+
+    if FoV > 2 * FoVnum:
+        print('Warning : Potential alisiang issue .. I recommend to create '
+              'initial PSD and pupil with a larger numbert of pixel')
+
+    # creation of a diff limited OTF (pupil autocorrelation)
+    tab = np.zeros((dimover, dimover), dtype=complex)
+    if phase_static is not None:
+        pupover = pupover * np.exp(1j * phase_static_o * 2 * np.pi / lbda)
+    tab[:npupover, :npupover] = pupover
+
+    dlFTO = fft2(np.abs(ifft2(tab))**2)
+    dlFTO = eclat(np.abs(dlFTO) / pup.sum())
+
+    # creation of A OTF
+    aoFTO = np.exp(-Dphi2 / 2)
+
+    # Computation of final OTF
+    sysFTO = aoFTO * dlFTO
+    sysFTO = eclat(sysFTO)
+
+    # Computation of final PSF
+    sysPSF = np.real(eclat(ifft2(sysFTO)))
+    sysPSF /= sysPSF.sum()  # normalisation to 1
+
+    samp = sampout
+    FoV = FoVnum * dimover / dim
+    return sysPSF
+
+
 if __name__ == "__main__":
     seeing = 1.
     L0 = 25.
@@ -812,7 +1003,16 @@ if __name__ == "__main__":
     psdm = np.mean(psd, axis=0)
 
     from astropy.io import fits
-    fits.writeto('psdm.fits', psdm, overwrite=True)
+    fits.writeto('psd_mean.fits', psdm, overwrite=True)
+
+    # from muse_analysis.plotutils import show_images_grid
+    # center = psdm.shape[0] // 2
+    # sl = slice(center - 10, center + 10)
+    # psd2 = psdm[sl, sl] / psdm.max()
+    # ref = fits.getdata('idl/psd_mean.fits')[sl, sl] / psdm.max()
+    # show_images_grid([ref, psd2, ref - psd2])
+    # plt.suptitle('IDL (left) vs Python (right)')
+    # plt.show()
 
     # Passage PSD --> PSF
     # ===================
@@ -821,8 +1021,8 @@ if __name__ == "__main__":
     nl = 35
     lambdamuse = np.linspace(lambdamin, lambdamax, nl)
 
-    __import__('pdb').set_trace()
     psf1 = psf_muse(psdm, lambdamuse)  # < 1s par lambda sur mon PC ...
+    fits.writeto('psf.fits', psf1, overwrite=True)
 
     # psf2 = psf_muse(psd,lambdamuse)
     # i= 9
