@@ -1,28 +1,9 @@
-"""Test script
+"""PSF reconstruction for MUSE WFM.
 
 Le programme simul_psd_wfm crée un jeu de DSP (par direction du champ).
 
 le programme psf_muse utilise ces DSP pour créer des PSF a chaque longueur
 d'onde avec un pixel scale de 0.2 arcsec.
-
-IDL notes:
-----------
-
-rgen(a, b, n, /le) => np.linspace(a, b, n)
-rgen(a, b, n) => np.linspace(a, b, n, endpoint=False)
-
-IDL> a = indgen(2, 5)
-IDL> a
-       0       1
-       2       3
-       4       5
-       6       7
-       8       9
-IDL> size(a)
-           2           2           5           2          10
-IDL> size(a, /dimensions)
-           2           5
-
 
 """
 
@@ -136,10 +117,10 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # STEP 1 : Simulation des PSF LGS (tilt inclus)
     # ===============================================
     # cube de DSP pour chaque direction d'interet - ZONE DE CORRECTION ONLY
-    dsp = dsp4muse_s(Dpup, Dimpup, dim1, Cn2, h, L0, r0ref, recons_cn2,
-                     recons_h, vent, arg_v, law, 1000, nsspup, nact, Fsamp,
-                     delay, bruitLGS2, lambdaref, poslgs, dirperf,
-                     verbose=verbose)
+    dsp = dsp4muse(Dpup, Dimpup, dim1, Cn2, h, L0, r0ref, recons_cn2,
+                   recons_h, vent, arg_v, law, 1000, nsspup, nact, Fsamp,
+                   delay, bruitLGS2, lambdaref, poslgs, dirperf,
+                   verbose=verbose)
 
     # Step 2: Calcul DSP fitting
     # ------
@@ -225,7 +206,7 @@ def eclat(imag, inverse=False):
     return gami
 
 
-def polaire2(rt, width, oc=0, inverse=False):
+def pupil_mask(rt, width, oc=0, inverse=False):
     """Calcul du masque de la pupille d'un télescope.
 
     rt = rayon du télescope (en pixels)
@@ -250,21 +231,23 @@ def calc_var_from_psd(psd, pixsize, Dpup):
     FD = 1 / Dpup
     boxsize = FD / pixsize
 
-    # mask de la pupille du telescope.
-    mask = polaire2(boxsize / 2, dim, inverse=True)
-
+    mask = pupil_mask(boxsize / 2, dim, inverse=True)
     return np.sum(psdtemp * mask)
 
 
-def calc_mat_rec_glao_finale_s(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
-                               sigr, DSP_tab_recons, h_recons, seuil,
-                               condmax, LSE=False):  # h_dm, Wflag=None,
-    """
-    This program computes the reconstruction matrix WMAP.
-    accounting for all reconstruction parameters
-    WMAP = Ptomo ## Wtomo
-    residual DSP is computed after that by CALC_DSP_RES.PRO
+def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
+                             sigr, DSP_tab_recons, h_recons, seuil,
+                             condmax, LSE=False):  # h_dm, Wflag=None,
+    """Computes the reconstruction matrix WMAP.
 
+    accounting for all reconstruction parameters::
+
+        WMAP = Ptomo ## Wtomo
+
+    residual DSP is computed after that by `calc_dsp_res_glao_finale`.
+
+    Parameters
+    ----------
     f = spatial frequencies array
     arg_f = F phase
     Nb_gs = Guide star number
@@ -287,6 +270,7 @@ def calc_mat_rec_glao_finale_s(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
 
     # WFS used is Shack.
     # Each WFS has its own cut off frequency
+
     # Construction of WFS transfert function
     wfs = np.zeros((nb_gs * s, s), dtype=complex)
     for j in range(nb_gs):
@@ -445,18 +429,15 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
                              DSP_tab_vrai, h_vrai, h_dm, Wmap, td, ti, wind,
                              tempo=False, fitting=False, err_recons=None,
                              err_noise=None):
-    """
-    Cette super fonction calcul la DSP_res (incluant tout les termes d'erreurs
-    classiques) pour TOUT type de WFAO.
+    """Calcule la DSP_res (incluant tout les termes d'erreurs classiques)
+    pour TOUT type de WFAO.
 
-    Par exemple, si on considere plusieurs etoiles Guides + plusieurs DMs + une
-    optimisation moyenne dans un champs => On fait de la MCAO
-
-    Si on ne met qu'1 DM, et qu'on optimise dans 1 direction en particulier =>
-    On fait de la LTAO/MOAO
-
-    Si on optimsie sur un grand champs, mais qu'on a qu'1 miroir => on fait du
-    GLAO.
+    - Si on considere plusieurs etoiles Guides + plusieurs DMs + une
+      optimisation moyenne dans un champs => On fait de la MCAO
+    - Si on ne met qu'1 DM, et qu'on optimise dans 1 direction en
+      particulier => On fait de la LTAO/MOAO
+    - Si on optimsie sur un grand champs, mais qu'on a qu'1 miroir => on
+      fait du GLAO.
 
     Bref, cette fonction, elle fait tout !
 
@@ -696,9 +677,9 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     return np.where((f != 0) & (abs(f_x) <= fc) & (abs(f_y) <= fc), dsp_res, 0)
 
 
-def dsp4muse_s(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
-               vent, arg_v, seuil, LAW, nsspup, nact, Fsamp, delay, bruitLGS2,
-               lambdaref, poslgs, dirperf, verbose=False):
+def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
+             vent, arg_v, seuil, LAW, nsspup, nact, Fsamp, delay, bruitLGS2,
+             lambdaref, poslgs, dirperf, verbose=False):
 
     # Passage en arcmin
     poslgs1 = poslgs / 60
@@ -768,9 +749,9 @@ def dsp4muse_s(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
     ti = 1 / fech_tab
     td = delay * 1.e-3
 
-    Wmap = calc_mat_rec_glao_finale_s(f, arg_f, pitchs_wfs, pitchs_DM, nb_gs,
-                                      poslgs1, sig2, DSP_tab_recons, h_recons,
-                                      seuil, condmax, LSE=LSE)
+    Wmap = calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_DM, nb_gs,
+                                    poslgs1, sig2, DSP_tab_recons, h_recons,
+                                    seuil, condmax, LSE=LSE)
 
     # DSP dans les differentes directions de reconstruction
     # =======================================================
@@ -809,7 +790,7 @@ def psd_fit(dim, L, r0, L0, fc):
     return out
 
 
-def psf_muse(psd, lambdamuse):
+def psf_muse(psd, lambdamuse, verbose=False):
     if psd.ndim == 2:
         ndir = 1
         dim = psd.shape[0]
@@ -821,7 +802,7 @@ def psf_muse(psd, lambdamuse):
 
     D = 8
     samp = 2
-    pup = polaire2(dim / 4, dim / 2, oc=0.14)
+    pup = pupil_mask(dim / 4, dim / 2, oc=0.14)
 
     dimpsf = 40
     pixcale = 0.2
@@ -836,12 +817,13 @@ def psf_muse(psd, lambdamuse):
         if ndir != 1:
             psf = np.zeros((ndir, npixc, npixc))
             for j in range(ndir):
-                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda,
-                                         samp=samp, FoV=FoV),
+                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda, samp=samp,
+                                         FoV=FoV, verbose=verbose),
                               nc=npixc, mil=True)
             psf = psf.mean(axis=0)
         else:
-            psf = psd_to_psf(psd, pup, D, lbda, samp=samp, FoV=FoV)
+            psf = psd_to_psf(psd, pup, D, lbda, samp=samp, FoV=FoV,
+                             verbose=verbose)
             # psf = crop(psf, nc=npixc, mil=True)
             center = psf.shape[0] // 2
             size = npixc // 2
@@ -851,6 +833,7 @@ def psf_muse(psd, lambdamuse):
         psf /= psf.sum()
         np.clip(psf, 0, None, out=psf)
 
+        # FIXME: griddata is slow!
         # psfall[i] = interpolate(psf, x, x, grid=True)
         x, y = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
         posin = np.mgrid[:npixc, :npixc].reshape(2, -1).T
@@ -980,12 +963,18 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     sysPSF = np.real(eclat(ifft2(sysFTO)))
     sysPSF /= sysPSF.sum()  # normalisation to 1
 
+    # FIXME: remove this or add option to return these values?
     samp = sampout
     FoV = FoVnum * dimover / dim
     return sysPSF
 
 
 if __name__ == "__main__":
+    visu = False
+    verbose = True
+    if visu:
+        plt.ion()
+
     seeing = 1.
     L0 = 25.
     Cn2 = [0.7, 0.3]
@@ -994,36 +983,36 @@ if __name__ == "__main__":
     npsflin = 3
     dim = 1280
 
-    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith,
-                        visu=False, verbose=True, npsflin=npsflin, dim=dim)
+    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=visu,
+                        verbose=verbose, npsflin=npsflin, dim=dim)
 
     # et voila la/les PSD
-    # on moyenne les PSD .. c'ets preque la meme chose que la moyenen des
-    # PSF ... et ca permet d'alller npsflin^2 fois plus vite
+    # on moyenne les PSD .. c'ets preque la meme chose que la moyenne des
+    # PSF ... et ca permet d'aller npsflin^2 fois plus vite
     psdm = np.mean(psd, axis=0)
 
     from astropy.io import fits
     fits.writeto('psd_mean.fits', psdm, overwrite=True)
 
-    # from muse_analysis.plotutils import show_images_grid
-    # center = psdm.shape[0] // 2
-    # sl = slice(center - 10, center + 10)
-    # psd2 = psdm[sl, sl] / psdm.max()
-    # ref = fits.getdata('idl/psd_mean.fits')[sl, sl] / psdm.max()
-    # show_images_grid([ref, psd2, ref - psd2])
-    # plt.suptitle('IDL (left) vs Python (right)')
-    # plt.show()
+    if visu:
+        from muse_analysis.plotutils import show_images_grid
+        center = psdm.shape[0] // 2
+        sl = slice(center - 10, center + 10)
+        psd2 = psdm[sl, sl] / psdm.max()
+        ref = fits.getdata('idl/psd_mean.fits')[sl, sl] / psdm.max()
+        show_images_grid([ref, psd2, ref - psd2])
+        plt.suptitle('IDL (left) vs Python (right)')
+        plt.show()
 
     # Passage PSD --> PSF
     # ===================
-    lambdamin = 490.
-    lambdamax = 930.
+    lambdamin = 490
+    lambdamax = 930
     nl = 35
-    lambdamuse = np.linspace(lambdamin, lambdamax, nl)
+    lbda = np.linspace(lambdamin, lambdamax, nl)
 
-    psf1 = psf_muse(psdm, lambdamuse)  # < 1s par lambda sur mon PC ...
-    fits.writeto('psf.fits', psf1, overwrite=True)
+    psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
+    fits.writeto('psf.fits', psf, overwrite=True)
 
-    # psf2 = psf_muse(psd,lambdamuse)
-    # i= 9
-    # atv,[psf1[*,*,i],psf2[*,*,i], abs(psf1[*,*,i]-psf2[*,*,i])]
+    fits.printdiff('psd_mean.fits', 'psfmuse/psd_mean.fits')
+    fits.printdiff('psf.fits', 'psfmuse/psf.fits')
