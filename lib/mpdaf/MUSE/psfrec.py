@@ -181,6 +181,7 @@ def pupil_mask(rt, width, oc=0, inverse=False):
     """
     center = (width - 1) / 2
     x, y = np.mgrid[:width, :width] - center
+    # FIXME: np.hypot(x - center, y - center)
     rho = np.sqrt(x ** 2 + y ** 2) / rt
     mask = ((rho < 1) & (rho >= oc))
     if inverse:
@@ -941,9 +942,50 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     return sysPSF
 
 
+def radial_profile(arr, binsize=1):
+    """Adapted from
+    https://github.com/keflavich/image_tools/blob/master/image_tools/radialprofile.py
+    """
+    x, y = np.ogrid[:arr.shape[0], :arr.shape[1]]
+    r = np.hypot(x - int(arr.shape[0]/2 + .5),
+                 y - int(arr.shape[1]/2 + .5))
+    nbins = int(np.round(r.max() / binsize) + 1)
+    maxbin = nbins * binsize
+    bins = np.linspace(0, maxbin, nbins+1)
+    nr = np.histogram(r, bins)[0]
+    radial_prof = np.histogram(r, bins, weights=arr)[0]
+    bin_centers = (bins[1:] + bins[:-1]) / 2
+    return bin_centers, radial_prof / nr
+
+
+def compare_psf(arr1, arr2, size=10, title=''):
+    from matplotlib.colors import LogNorm
+    if size:
+        center = arr1.shape[0] // 2
+        arr1 = crop(arr1, center, size) / arr1.max()
+        arr2 = crop(arr2, center, size) / arr2.max()
+
+    fig, axes = plt.subplots(1, 4, figsize=(14, 3), tight_layout=True)
+    for i, (ax, arr) in enumerate(zip(axes, (arr1, arr2, arr1 - arr2))):
+        im = ax.imshow(arr, norm=LogNorm(), vmax=1 if i < 2 else None)
+        fig.colorbar(im, ax=ax)
+
+    for arr in (arr1, arr2):
+        center, radial_prof = radial_profile(arr)
+        axes[-1].plot(center[1:], radial_prof[1:], lw=1)
+    axes[-1].set_yscale('log')
+
+    for ax, t in zip(axes, ('IDL', 'Python', 'diff', 'radial profile')):
+        ax.set_title(t)
+    fig.suptitle(title)
+    plt.show()
+
+
 if __name__ == "__main__":
     visu = '--visu' in sys.argv
     verbose = '--verbose' in sys.argv
+    if visu:
+        plt.rcParams.update({'font.family': 'serif', 'text.usetex': True})
 
     seeing = 1.
     L0 = 25.
@@ -966,13 +1008,7 @@ if __name__ == "__main__":
     fits.writeto('psd_mean.fits', psdm, overwrite=True)
 
     if visu:
-        from muse_analysis.plotutils import show_images_grid
-        center = psdm.shape[0] // 2
-        psd2 = crop(psdm, center, 10) / psdm.max()
-        ref = crop(fits.getdata('idl/psd_mean.fits'), center, 10) / psdm.max()
-        show_images_grid([ref, psd2, ref - psd2, ref - psd2.T])
-        plt.suptitle('IDL (left) vs Python (right)')
-        plt.show()
+        compare_psf(fits.getdata('idl/psd_mean.fits'), psdm, size=10)
 
     # Passage PSD --> PSF
     # ===================
@@ -983,3 +1019,6 @@ if __name__ == "__main__":
 
     psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
     fits.writeto('psf.fits', psf, overwrite=True)
+
+    if visu:
+        compare_psf(fits.getdata('idl/psf.fits')[0], psf[0], size=20)
