@@ -269,7 +269,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     Mr = np.zeros((nb_h_recons * s, nb_gs * s), dtype=complex)
     for j in range(nb_gs):
         for i in range(nb_h_recons):
-            # 206265 c'est quoi ca ?
+            # FIXME: 206265 c'est quoi ca ?
             ff_x = f_x * alpha[0, j] * h_recons[i] * 60 / 206265
             ff_y = f_y * alpha[1, j] * h_recons[i] * 60 / 206265
             Mr[i * s:(i + 1) * s, j * s:(j + 1) * s] = \
@@ -761,6 +761,15 @@ def crop(arr, center, size):
     return arr[sl, sl]
 
 
+def interpolate(arr, xout, method='linear'):
+    """Function that mimics IDL's interpolate."""
+    xin = np.arange(arr.shape[0])
+    # xout = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
+    if method == 'cubic':
+        raise NotImplementedError('FIXME: use gridddata or spline ?')
+    return interpn((xin, xin), arr, xout.T, method='linear').T
+
+
 def psf_muse(psd, lambdamuse, verbose=False):
     if psd.ndim == 2:
         ndir = 1
@@ -798,11 +807,10 @@ def psf_muse(psd, lambdamuse, verbose=False):
             psf = crop(psf, center=psf.shape[0] // 2, size=npixc // 2)
 
         psf /= psf.sum()
-        np.clip(psf, 0, None, out=psf)
+        np.maximum(psf, 0, out=psf)
 
-        xin = np.arange(npixc)
         pos = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
-        psfall[i] = interpn((xin, xin), psf, pos.T, method='linear').T
+        psfall[i] = interpolate(psf, pos, method='linear')
         psfall[i] = psfall[i] / psfall[i].sum()
 
     return psfall
@@ -880,11 +888,12 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
 
     if not np.allclose(FoV, FoVnum):
         dimover = int(np.fix(dimnum * overFoV / 2)) * 2
-        npupover = int(np.fix(npup * overFoV / 2)) * 2
         xxover = np.arange(dimover) / dimover * dimnum
+        Dphi2 = np.maximum(interpolate(Dphi2, xxover, method='cubic'), 0)
+
+        npupover = int(np.fix(npup * overFoV / 2)) * 2
         xxpupover = np.arange(npupover) / npupover * npup
-        Dphi2 = interpolate(Dphi2, xxover, xxover, cubic=True, grid=True) > 0
-        pupover = interpolate(pup, xxpupover, xxpupover, cubic=True, grid=True) > 0
+        pupover = np.maximum(interpolate(pup, xxpupover, method='cubic'), 0)
     else:
         dimover = dimnum
         npupover = npup
@@ -895,8 +904,8 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
         if npups != npup:
             print("pup and static phase must have the same number of pixels")
         if not np.allclose(FoV, FoVnum):
-            phase_static = interpolate(phase_static, xxpupover, xxpupover,
-                                       cubic=True, grid=True) > 0
+            phase_static = np.maximum(
+                interpolate(phase_static, xxpupover, method='cubic'), 0)
 
     if verbose:
         print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
@@ -935,12 +944,11 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
 if __name__ == "__main__":
     visu = '--visu' in sys.argv
     verbose = '--verbose' in sys.argv
-    if visu:
-        plt.ion()
 
     seeing = 1.
     L0 = 25.
     Cn2 = [0.7, 0.3]
+
     h = [500, 15000.]
     zenith = 0.
     npsflin = 3
@@ -960,10 +968,9 @@ if __name__ == "__main__":
     if visu:
         from muse_analysis.plotutils import show_images_grid
         center = psdm.shape[0] // 2
-        sl = slice(center - 10, center + 10)
-        psd2 = psdm[sl, sl] / psdm.max()
-        ref = fits.getdata('idl/psd_mean.fits')[sl, sl] / psdm.max()
-        show_images_grid([ref, psd2, ref - psd2])
+        psd2 = crop(psdm, center, 10) / psdm.max()
+        ref = crop(fits.getdata('idl/psd_mean.fits'), center, 10) / psdm.max()
+        show_images_grid([ref, psd2, ref - psd2, ref - psd2.T])
         plt.suptitle('IDL (left) vs Python (right)')
         plt.show()
 
@@ -976,6 +983,3 @@ if __name__ == "__main__":
 
     psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
     fits.writeto('psf.fits', psf, overwrite=True)
-
-    fits.printdiff('psd_mean.fits', 'psfmuse/psd_mean.fits')
-    fits.printdiff('psf.fits', 'psfmuse/psf.fits')
