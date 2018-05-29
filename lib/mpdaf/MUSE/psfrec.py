@@ -9,9 +9,10 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 import matplotlib.pyplot as plt
 import numpy as np
+import sys
 from math import gamma
 from numpy.fft import fft2, ifft2, fftshift
-from scipy.interpolate import griddata
+from scipy.interpolate import interpn
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -754,6 +755,12 @@ def psd_fit(dim, L, r0, L0, fc):
     return out
 
 
+def crop(arr, center, size):
+    center, size = int(center), int(size)
+    sl = slice(center - size, center + size)
+    return arr[sl, sl]
+
+
 def psf_muse(psd, lambdamuse, verbose=False):
     if psd.ndim == 2:
         ndir = 1
@@ -783,25 +790,19 @@ def psf_muse(psd, lambdamuse, verbose=False):
             for j in range(ndir):
                 psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda, samp=samp,
                                          FoV=FoV, verbose=verbose),
-                              nc=npixc, mil=True)
+                              center=psf.shape[0] // 2, size=npixc // 2)
             psf = psf.mean(axis=0)
         else:
             psf = psd_to_psf(psd, pup, D, lbda, samp=samp, FoV=FoV,
                              verbose=verbose)
-            # psf = crop(psf, nc=npixc, mil=True)
-            center = psf.shape[0] // 2
-            size = npixc // 2
-            sl = slice(center - size, center + size)
-            psf = psf[sl, sl]
+            psf = crop(psf, center=psf.shape[0] // 2, size=npixc // 2)
 
         psf /= psf.sum()
         np.clip(psf, 0, None, out=psf)
 
-        # FIXME: griddata is slow!
-        # psfall[i] = interpolate(psf, x, x, grid=True)
-        x, y = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
-        posin = np.mgrid[:npixc, :npixc].reshape(2, -1).T
-        psfall[i] = griddata(posin, psf.ravel(), (x, y), method='linear')
+        xin = np.arange(npixc)
+        pos = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
+        psfall[i] = interpn((xin, xin), psf, pos.T, method='linear').T
         psfall[i] = psfall[i] / psfall[i].sum()
 
     return psfall
@@ -894,10 +895,8 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
         if npups != npup:
             print("pup and static phase must have the same number of pixels")
         if not np.allclose(FoV, FoVnum):
-            phase_static_o = interpolate(phase_static, xxpupover, xxpupover,
-                                         cubic=True, grid=True) > 0
-        else:
-            phase_static_o = phase_static
+            phase_static = interpolate(phase_static, xxpupover, xxpupover,
+                                       cubic=True, grid=True) > 0
 
     if verbose:
         print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
@@ -910,7 +909,7 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     # creation of a diff limited OTF (pupil autocorrelation)
     tab = np.zeros((dimover, dimover), dtype=complex)
     if phase_static is not None:
-        pupover = pupover * np.exp(1j * phase_static_o * 2 * np.pi / lbda)
+        pupover = pupover * np.exp(1j * phase_static * 2 * np.pi / lbda)
     tab[:npupover, :npupover] = pupover
 
     dlFTO = fft2(np.abs(ifft2(tab))**2)
@@ -934,8 +933,8 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
 
 
 if __name__ == "__main__":
-    visu = False
-    verbose = True
+    visu = '--visu' in sys.argv
+    verbose = '--verbose' in sys.argv
     if visu:
         plt.ion()
 
