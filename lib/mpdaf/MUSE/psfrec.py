@@ -160,7 +160,7 @@ def direction_perf(champ, nblin, visu=False, lgs=None, ngs=None):
         plt.ylim((-1.25 * champvisu, 1.25 * champvisu))
         plt.xlabel('arcsecond')
         plt.ylabel('arcsecond')
-        plt.show()
+        plt.show(block=False)
 
     return dirperf
 
@@ -180,9 +180,8 @@ def pupil_mask(rt, width, oc=0, inverse=False):
     oc = taux d'occultation centrale linéaire
     """
     center = (width - 1) / 2
-    x, y = np.mgrid[:width, :width] - center
-    # FIXME: np.hypot(x - center, y - center)
-    rho = np.sqrt(x ** 2 + y ** 2) / rt
+    x, y = np.ogrid[:width, :width]
+    rho = np.hypot(x - center, y - center) / rt
     mask = ((rho < 1) & (rho >= oc))
     if inverse:
         mask = ~mask
@@ -958,7 +957,7 @@ def radial_profile(arr, binsize=1):
     return bin_centers, radial_prof / nr
 
 
-def compare_psf(arr1, arr2, size=10, title=''):
+def compare_psf(arr1, arr2, size=None, title='', savefig=None):
     from matplotlib.colors import LogNorm
     if size:
         center = arr1.shape[0] // 2
@@ -966,8 +965,9 @@ def compare_psf(arr1, arr2, size=10, title=''):
         arr2 = crop(arr2, center, size) / arr2.max()
 
     fig, axes = plt.subplots(1, 4, figsize=(14, 3), tight_layout=True)
-    for i, (ax, arr) in enumerate(zip(axes, (arr1, arr2, arr1 - arr2))):
-        im = ax.imshow(arr, norm=LogNorm(), vmax=1 if i < 2 else None)
+    for i, (ax, arr) in enumerate(zip(axes, (arr1, arr2, arr2 - arr1))):
+        kw = dict(norm=LogNorm(), vmax=1) if i < 2 else {}
+        im = ax.imshow(arr, origin='lower', **kw)
         fig.colorbar(im, ax=ax)
 
     for arr in (arr1, arr2):
@@ -975,10 +975,12 @@ def compare_psf(arr1, arr2, size=10, title=''):
         axes[-1].plot(center[1:], radial_prof[1:], lw=1)
     axes[-1].set_yscale('log')
 
-    for ax, t in zip(axes, ('IDL', 'Python', 'diff', 'radial profile')):
+    for ax, t in zip(axes, ('IDL', 'Python', 'Py - IDL', 'radial profile')):
         ax.set_title(t)
     fig.suptitle(title)
-    plt.show()
+    if savefig:
+        fig.savefig(savefig)
+    plt.show(block=False)
 
 
 if __name__ == "__main__":
@@ -1008,7 +1010,8 @@ if __name__ == "__main__":
     fits.writeto('psd_mean.fits', psdm, overwrite=True)
 
     if visu:
-        compare_psf(fits.getdata('idl/psd_mean.fits'), psdm, size=10)
+        compare_psf(fits.getdata('idl/psd_mean.fits'), psdm, savefig='psd.pdf',
+                    size=40, title='Comparison of mean PSD')
 
     # Passage PSD --> PSF
     # ===================
@@ -1021,4 +1024,6 @@ if __name__ == "__main__":
     fits.writeto('psf.fits', psf, overwrite=True)
 
     if visu:
-        compare_psf(fits.getdata('idl/psf.fits')[0], psf[0], size=20)
+        compare_psf(fits.getdata('idl/psf.fits')[1], psf[1],
+                    title='Comparison of PSF @500nm', savefig='psf.pdf')
+        input('Press Enter to exit')
