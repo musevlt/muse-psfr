@@ -69,8 +69,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     recons_h = altDM   # a priori sur h   => ici GLAO
 
     # Step 0.3 : Direction d'estimation
-    champ = 60
-    dirperf = direction_perf(champ=champ, nblin=npsflin, visu=visu, lgs=poslgs)
+    field_size = 60
+    dirperf = direction_perf(field_size, npsflin, visu=visu, lgs=poslgs)
 
     # Step 0.4 : Paremetres numériques
     # ---------
@@ -135,13 +135,10 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     return dspf * (lambdaref * 1000. / (2. * np.pi)) ** 2
 
 
-def direction_perf(champ, nblin, visu=False, lgs=None, ngs=None):
-    if nblin > 1:
-        linear_tab = np.linspace(-1, 1, nblin) * champ / 2
-        y, x = np.meshgrid(linear_tab, linear_tab, indexing='ij')
-        dirperf = np.array([y, x]).reshape(2, -1)
-    else:
-        dirperf = np.zeros((2, 1))
+def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
+    """Create a grid of points where the PSF is estimated."""
+    x, y = (np.mgrid[:npts, :npts] - npts//2) * field_size / 2
+    dirperf = np.array([x, y]).reshape(2, -1)
 
     if visu:
         champvisu = np.max(dirperf)
@@ -172,16 +169,16 @@ def seeing2r01(seeing, lbda, zenith):
     return r0
 
 
-def pupil_mask(rt, width, oc=0, inverse=False):
+def pupil_mask(radius, width, oc=0, inverse=False):
     """Calcul du masque de la pupille d'un télescope.
 
-    rt = rayon du télescope (en pixels)
+    radius = rayon du télescope (en pixels)
     largeur = taille du masque
     oc = taux d'occultation centrale linéaire
     """
     center = (width - 1) / 2
     x, y = np.ogrid[:width, :width]
-    rho = np.hypot(x - center, y - center) / rt
+    rho = np.hypot(x - center, y - center) / radius
     mask = ((rho < 1) & (rho >= oc))
     if inverse:
         mask = ~mask
@@ -659,16 +656,10 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
 
     # -------------------------------------------------------------------
     # local_L = Dpup * dimall / pupdim  # taille de l'ecran en m.
-    # original method:
-    # fx = eclat(((np.arange(dimall) - dimall // 2) / local_L) *
-    #            np.ones((dimall, 1)))
-    # fy = np.transpose(fx)
-    # another method:
-    # fy, fx = eclat((np.mgrid[:dimall, :dimall] - dimall // 2) / local_L)
 
     fx = np.fft.fftfreq(dimall, Dpup / pupdim)[:, np.newaxis]
     fy = fx.T
-    f = np.sqrt(fx ** 2 + fy ** 2)  # c'est f le tableau
+    f = np.sqrt(fx ** 2 + fy ** 2)
     with np.errstate(all='ignore'):
         arg_f = fy / fx
     arg_f[0, 0] = 0  # to get the same as idl (instead of NaN)
