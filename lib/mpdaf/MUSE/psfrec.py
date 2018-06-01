@@ -119,7 +119,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # ===============================================
     # cube de DSP pour chaque direction d'interet - ZONE DE CORRECTION ONLY
     dsp = dsp4muse(Dpup, Dimpup, Dimpup * 2, Cn2, h, L0, r0ref, recons_cn2,
-                   recons_h, vent, arg_v, law, 1000, nsspup, nact, Fsamp,
+                   recons_h, vent, arg_v, 1000, law, nsspup, nact, Fsamp,
                    delay, bruitLGS2, lambdaref, poslgs, dirperf,
                    verbose=verbose)
 
