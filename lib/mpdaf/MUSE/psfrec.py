@@ -49,11 +49,11 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # Step 0.2 : Systeme
     # ---------
     Dpup = 8.          # en m (diametre du telescope)
-    oc = 0.14          # normalisée [de 0 --> 1]
+    # oc = 0.14          # normalisée [de 0 --> 1]
     altDM = 1.         # en m
     hsodium = 90000.   # en m
 
-    lambdalgs = 0.589  # en µm
+    # lambdalgs = 0.589  # en µm
     lambdaref = 0.5    # en µm
     nact = 40.         # nombre lineaire d'actionneurs
     nsspup = 40.       # nombre lineaire d'actionneurs
@@ -111,7 +111,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # => important pour les normalisations
     # L = dim / Dimpup * Dpup
 
-    nact1 = 30.
+    nact1 = 30.  # FIXME: not the same as nact/nssspup ?
     pitch = Dpup / nact1   # pitch: inter-actuator distance [m]
     fc = 1. / (2 * pitch)  # pItch frequency (1/2a)  [m^{-1}]
 
@@ -126,8 +126,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # STEP 2: Calcul DSP fitting
     # ===============================================
     dspa = fftshift(psd_fit(dim, 2 * Dpup, r0ref, L0, fc))
-    ns = dsp.shape[0]
-    dspf = np.resize(dspa, (ns, dim, dim))
+    dspf = np.resize(dspa, (dsp.shape[0], dim, dim))
 
     # Finale
     sl = slice(dim // 2 - Dimpup, dim // 2 + Dimpup)
@@ -258,8 +257,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # Cb = a priori on noise for each GS
     # Cphi = a priori on turbulence profile
 
-    # Brique 1 :
-    # M.Palpha'
+    # Brique 1 : M.Palpha'
     nb_h_recons = h_recons.size
     Mr = np.zeros((nb_h_recons * s, nb_gs * s), dtype=complex)
     for j in range(nb_gs):
@@ -270,8 +268,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
             Mr[i * s:(i + 1) * s, j * s:(j + 1) * s] = (
                 wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
 
-    # suppression of WFS
-    wfs = 0
+    wfs = None
 
     # Transpose
     Mr_t = np.zeros((nb_gs * s, nb_h_recons * s), dtype=complex)
@@ -292,19 +289,12 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # -----------------------------------------------------------------------
 
     # Construction of Cb_inv (a priori on noise)
-    Cb_inv_recons = np.zeros((nb_gs * s, nb_gs * s), dtype=complex)
-    for k in range(nb_gs):
-        for i in range(nb_gs):
-            if i == k:
-                Cb_inv_recons[s * i:s * (i + 1), s * k:s * (k + 1)] = 1. / sigr[i]
+    Cb_inv_recons = 1 / sigr
 
     # Cphi-1, a priori on turbulence layers, computed from DSP_tab_recons
     Cphi_inv_recons = np.zeros((nb_h_recons * s, nb_h_recons * s))
-
-    for k in range(nb_h_recons):
-        for i in range(nb_h_recons):
-            if i == k:
-                Cphi_inv_recons[s * i:s * (i + 1), s * k:s * (k + 1)] = \
+    for i in range(nb_h_recons):
+        Cphi_inv_recons[s * i:s * (i + 1), s * i:s * (i + 1)] = \
                     1. / DSP_tab_recons[i]
 
     # Filtering of piston in reconstruction :
@@ -317,30 +307,26 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # ----------------------------------------------------------------------
     # Mrt#Cb_inv first
     res_tmp = np.zeros_like(Mr_t)
-
     for i in range(nb_gs):
+        si = slice(i * s, (i + 1) * s)
         for j in range(nb_h_recons):
-            for k in range(nb_gs):
-                res_tmp[i * s:(i + 1) * s, j * s:(j + 1) * s] += \
-                    (Mr_t[k * s:(k + 1) * s, j * s:(j + 1) * s] *
-                     Cb_inv_recons[i * s:(i + 1) * s, k * s:(k + 1) * s])
+            sj = slice(j * s, (j + 1) * s)
+            res_tmp[si, sj] += Mr_t[si, sj] * Cb_inv_recons[i]
 
-    Cb_inv_recons = 0
     # Mrt#Cb_inv#Mr then :
     model_r = np.zeros((nb_h_recons * s, nb_h_recons * s), dtype=complex)
-
     for k in range(nb_gs):
+        sk = slice(k * s, (k + 1) * s)
         for i in range(nb_h_recons):
+            si = slice(i * s, (i + 1) * s)
             for j in range(nb_h_recons):
-                model_r[i * s:(i + 1) * s, j * s:(j + 1) * s] += \
-                    (res_tmp[k * s:(k + 1) * s, j * s:(j + 1) * s] *
-                     Mr[i * s:(i + 1) * s, k * s:(k + 1) * s])
+                sj = slice(j * s, (j + 1) * s)
+                model_r[si, sj] += res_tmp[sk, sj] * Mr[si, sk]
 
     # to be inversed :
     MAP = model_r + Cphi_inv_recons
+    model_r = Cphi_inv_recons = None
 
-    Cphi_inv_recons = None
-    model_r = None
     # ---------------------------------------------------------------------
     # Without a priori, this is WLSE
     # ---------------------------------------------------------------------
@@ -375,11 +361,12 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # Last step W1 = inv#res_tmp
     W1 = np.zeros((nb_gs * s, nb_h_recons * s), dtype=complex)
     for i in range(nb_gs):
+        si = slice(i * s, (i + 1) * s)
         for j in range(nb_h_recons):
+            sj = slice(j * s, (j + 1) * s)
             for k in range(nb_h_recons):
-                W1[i * s:(i + 1) * s, j * s:(j + 1) * s] += \
-                    (inv[k * s:(k + 1) * s, j * s:(j + 1) * s] *
-                     res_tmp[i * s:(i + 1) * s, k * s:(k + 1) * s])
+                sk = slice(k * s, (k + 1) * s)
+                W1[si, sj] += inv[sk, sj] * res_tmp[si, sk]
 
     return W1
 
@@ -487,87 +474,52 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     # deltaT = (max(ti) + td)(0)
     deltaT = ti.max() + td
     # -----------------
-    proj_beta = np.zeros((s * nb_h_vrai, s), dtype=complex)
+    proj_beta = np.zeros((nb_h_vrai, s, s), dtype=complex)
     for j in range(nb_h_vrai):
         # on considere un shift en X,Y en marche arriere :
-        proj_beta[j * s:(j + 1) * s, :] = np.exp(
+        proj_beta[j] = np.exp(
             1j * 2 * np.pi *
             (h_vrai[j] * 60 / 206265 * (beta[0] * f_x + beta[1] * f_y) -
              (wind[0, j] * deltaT * f_x + wind[1, j] * deltaT * f_y)))
 
-    # ensuite, faut ecrire PbetaL
-    # proj_beta = np.zeros((s*nb_h_vrai, s), dtype=complex)
-    # for j in range(nb_h_vrai):
-    # proj_beta(j*s:(j+1)*s-1, *) = np.exp(1j*2*np.pi*h_vrai[j]*60/206265*
-    # (beta[0]*f_x+beta[1]*f_y))
-
     # et PbetaDM
     h_dm = np.atleast_1d(h_dm)
     nb_h_dm = h_dm.size
-    proj_betaDM = np.zeros((s * nb_h_dm, s), dtype=complex)
+    proj_betaDM = np.zeros((nb_h_dm, s, s), dtype=complex)
     for j in range(nb_h_dm):
-        proj_betaDM[j * s:(j + 1) * s, :] = np.exp(
-            1j * 2 * np.pi * h_dm[j] * 60 / 206265 *
-            (beta[0] * f_x + beta[1] * f_y))
+        proj_betaDM[j] = np.exp(1j * 2 * np.pi * h_dm[j] * 60 / 206265 *
+                                (beta[0] * f_x + beta[1] * f_y))
 
     # ok, on ecrit donc le produit de toutes ces matrices :
     # PbetaDM#WMAP c'est un vecteur qui fait Ngs
-    proj_tmp = np.zeros((nb_gs * s, s), dtype=complex)
+    proj_tmp = np.zeros((nb_gs, s, s), dtype=complex)
     for i in range(nb_gs):
         for k in range(nb_h_dm):
-            proj_tmp[i * s:(i + 1) * s, :] += (
-                proj_betaDM[k * s:(k + 1) * s, :] *
-                Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
+            proj_tmp[i] += (proj_betaDM[k] *
+                            Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
 
     # Puis, on ecrit proj_tmp#Mv
-    proj_tmp2 = np.zeros((nb_h_vrai * s, s), dtype=complex)
+    proj_tmp2 = np.zeros((nb_h_vrai, s, s), dtype=complex)
     for i in range(nb_h_vrai):
         for k in range(nb_gs):
-            proj_tmp2[i * s:(i + 1) * s, :] += (
-                proj_tmp[k * s:(k + 1) * s, :] *
-                Mv[i * s:(i + 1) * s, k * s:(k + 1) * s])
+            proj_tmp2[i] += (proj_tmp[k] *
+                             Mv[i * s:(i + 1) * s, k * s:(k + 1) * s])
 
     # Puis (PbetaL - proj) ca sera le projecteur qu'on appliquera a Cphi pour
     # trouver l'erreur de reconstruction
     proj = proj_beta - proj_tmp2
     Mv = proj_tmp = proj_tmp2 = proj_beta = None
 
-    # il faut son transposée : proj_T
-    proj_conj = np.zeros((s, nb_h_vrai * s), dtype=complex)
-    for j in range(nb_h_vrai):
-        proj_conj[:, j * s:(j + 1) * s] = proj[j * s:(j + 1) * s, :].conj()
-
-    # il manque juste a exprimer Cphi_vrai :
-    Cphi_vrai = np.zeros((nb_h_vrai * s, nb_h_vrai * s))
-
-    for i in range(nb_h_vrai):
-        for k in range(nb_h_vrai):
-            if i == k:
-                Cphi_vrai[s * i:s * (i + 1), s * k:s * (k + 1)] = \
-                    DSP_tab_vrai[i]
-
     # -----------------------------------------------------------------
     # MAINTENANT ON PEUT ECRIRE err_recons !!!!
     # -----------------------------------------------------------------
 
     # err_recons = proj#Cphi#proj_conj
-    inter = np.zeros((s * nb_h_vrai, s), dtype=complex)
-
-    for i in range(nb_h_vrai):
-        for j in range(nb_h_vrai):
-            inter[i * s:(i + 1) * s, :] += (
-                proj[j * s:(j + 1) * s, :] *
-                Cphi_vrai[i * s:(i + 1) * s, j * s:(j + 1) * s])
-
-    err_recons = np.zeros((s, s), dtype=complex)
-    for j in range(nb_h_vrai):
-        tmp = inter[j * s:(j + 1) * s, :] * proj_conj[:, j * s:(j + 1) * s]
-        err_recons += tmp
-
+    Cphi_vrai = DSP_tab_vrai
+    err_recons = np.sum(proj * Cphi_vrai * proj.conj(), axis=0)
     err_recons[0, 0] = 0.
     err_recons = err_recons.real
-
-    Cphi_vrai = proj = proj_conj = inter = None
+    proj = None
 
     # --------------------------------------------------------------------
     # ET VOILA, ON A LA DSP D'ERREUR DE RECONSTRCUTION GLAO
@@ -580,45 +532,19 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
 
     # That is Easy, ca s'ecrit : PbetaDM#Wmap#Cb#(PbetaDM#Wmap)T
     # Faut deja ecrire PbetaDM#Wmap
-
-    proj_noise = np.zeros((nb_gs * s, s), dtype=complex)
+    proj_noise = np.zeros((nb_gs, s, s), dtype=complex)
     for i in range(nb_gs):
         for k in range(nb_h_dm):
-            proj_noise[i * s:(i + 1) * s, :] += (
-                proj_betaDM[k * s:(k + 1) * s, :] *
-                Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
-
-    # Puis faut le transposer :
-    proj_noise_conj = np.zeros((s, nb_gs * s), dtype=complex)
-    for j in range(nb_gs):
-        proj_noise_conj[:, j * s:(j + 1) * s] = \
-            proj_noise[j * s:(j + 1) * s, :].conj()
-
-    # Faut ecrire Cb_vrai :
-    Cb_vrai = np.zeros((nb_gs * s, nb_gs * s), dtype=complex)
-    for i in range(nb_gs):
-        for k in range(nb_gs):
-            if i == k:
-                Cb_vrai[s * i:s * (i + 1), s * k:s * (k + 1)] = sigv[i]
+            proj_noise[i] += (proj_betaDM[k] *
+                              Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
 
     # -----------------------------------------------------------------------
     # MAINTENANT ON PEUT ECRIRE err_noise !!!!
     # -----------------------------------------------------------------------
 
     # err_noise = proj_noise#Cb#proj_noise_conj
-    inter = np.zeros((s * nb_gs, s), dtype=complex)
-
-    for i in range(nb_gs):
-        for j in range(nb_gs):
-            inter[i * s:(i + 1) * s, :] += (
-                proj_noise[j * s:(j + 1) * s, :] *
-                Cb_vrai[i * s:(i + 1) * s, j * s:(j + 1) * s])
-
-    err_noise = np.zeros((s, s), dtype=complex)
-    for j in range(nb_gs):
-        err_noise += (inter[j * s:(j + 1) * s, :] *
-                      proj_noise_conj[:, j * s:(j + 1) * s])
-
+    Cb_vrai = sigv[:, None, None]
+    err_noise = np.sum(proj_noise * Cb_vrai * proj_noise.conj(), axis=0)
     err_noise[0, 0] = 0.
     err_noise = err_noise.real
 
@@ -650,7 +576,6 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
     cst = 0.0229
 
     # -------------------------------------------------------------------
-    # local_L = Dpup * dimall / pupdim  # taille de l'ecran en m.
 
     fx = np.fft.fftfreq(dimall, Dpup / pupdim)[:, np.newaxis]
     fy = fx.T
