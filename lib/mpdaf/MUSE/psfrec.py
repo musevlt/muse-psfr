@@ -13,6 +13,7 @@ import sys
 from math import gamma
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
+from time import time
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -234,18 +235,15 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # Each WFS has its own cut off frequency
 
     # Construction of WFS transfert function
-    wfs = np.zeros((nb_gs * s, s), dtype=complex)
-    for j in range(nb_gs):
-        ccc = (2 * np.pi * f * 1j *
-               np.sinc(pitchs_wfs[j] * f_x) * np.sinc(pitchs_wfs[j] * f_y))
-        fc = 1 / (2 * pitchs_wfs[j])
-        # where((f NE 0) and (abs(f_x) GE fc) OR (abs(f_y) GE fc), count)
-        # FIXME missing parenthesis around | ?
-        ccc[(f != 0) & (np.abs(f_x) >= fc) | (np.abs(f_y) >= fc)] = 0.
-        wfs[j * s:(j + 1) * s, :] = ccc
-    ccc = None
-    # NB: Here CCC is the transfert function of a SH, but something else could
-    # be written here. Pyramid / Curvature / direct phase sensing (CCC=1)
+    # NB: Here wfs is the transfert function of a SH, but something else could
+    # be written here. Pyramid / Curvature / direct phase sensing (wfs=1)
+    pitchs_wfs = pitchs_wfs[:, None, None]  # to broadcast to (nb_gs, s, s)
+    wfs = (2 * np.pi * 1j * f *
+           np.sinc(pitchs_wfs * f_x) * np.sinc(pitchs_wfs * f_y))
+    fc = 1 / (2 * pitchs_wfs)
+    # where((f NE 0) and (abs(f_x) GE fc) OR (abs(f_y) GE fc), count)
+    # FIXME missing parenthesis around | ?
+    wfs[(f != 0) & (np.abs(f_x) >= fc) | (np.abs(f_y) >= fc)] = 0.
 
     # -----------------------------------------------------------
     # Construction of WHAP = PtomoWtomo
@@ -269,9 +267,8 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
             # FIXME: 206265 c'est quoi ca ?
             ff_x = f_x * alpha[0, j] * h_recons[i] * 60 / 206265
             ff_y = f_y * alpha[1, j] * h_recons[i] * 60 / 206265
-            Mr[i * s:(i + 1) * s, j * s:(j + 1) * s] = \
-                (wfs[j * s:(j + 1) * s, :] *
-                 np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
+            Mr[i * s:(i + 1) * s, j * s:(j + 1) * s] = (
+                wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
 
     # suppression of WFS
     wfs = 0
@@ -308,7 +305,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
         for i in range(nb_h_recons):
             if i == k:
                 Cphi_inv_recons[s * i:s * (i + 1), s * k:s * (k + 1)] = \
-                    1. / DSP_tab_recons[s * i:s * (i + 1), :]
+                    1. / DSP_tab_recons[i]
 
     # Filtering of piston in reconstruction :
     Cphi_inv_recons[0, 0] = 0.
@@ -467,14 +464,13 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     # C'est la matrice M.PalphaL, elle contient tous les phaseurs pour le vrai
     # profil de turbulence.
     # Type de WFS :
-    wfs = np.zeros((nb_gs * s, s), dtype=complex)
-    for j in range(nb_gs):
-        ccc = (2 * np.pi * f * 1j *
-               np.sinc(pitchs_wfs[j] * f_x) * np.sinc(pitchs_wfs[j] * f_y))
-        fc = 1 / (2 * pitchs_wfs[j])
-        # where((f != 0) and (abs(f_x) GT fc) OR (abs(f_y) GT fc), count)
-        ccc[(f != 0) & (np.abs(f_x) > fc) | (np.abs(f_y) > fc)] = 0.
-        wfs[j * s:(j + 1) * s, :] = ccc
+    pitchs_wfs = pitchs_wfs[:, None, None]  # to broadcast to (nb_gs, s, s)
+    wfs = (2 * np.pi * 1j * f *
+           np.sinc(pitchs_wfs * f_x) * np.sinc(pitchs_wfs * f_y))
+    fc = 1 / (2 * pitchs_wfs)
+    # where((f != 0) and (abs(f_x) GT fc) OR (abs(f_y) GT fc), count)
+    # FIXME missing parenthesis around | ? > vs >= ?
+    wfs[(f != 0) & (np.abs(f_x) > fc) | (np.abs(f_y) > fc)] = 0.
 
     Mv = np.zeros((nb_h_vrai * s, nb_gs * s), dtype=complex)
     for i in range(nb_h_vrai):
@@ -483,8 +479,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
             ff_y = f_y * alpha[1, j] * h_vrai[i] * 60 / 206265
             www = np.sinc(wind[0, i] * ti[j] * f_x + wind[1, i] * ti[j] * f_y)
             Mv[i * s:(i + 1) * s, j * s:(j + 1) * s] = (
-                www * wfs[j * s:(j + 1) * s, :] *
-                np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
+                www * wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
     wfs = None
 
     # ensuite, faut ecrire PbetaL#
@@ -549,7 +544,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
         for k in range(nb_h_vrai):
             if i == k:
                 Cphi_vrai[s * i:s * (i + 1), s * k:s * (k + 1)] = \
-                    DSP_tab_vrai[s * i:s * (i + 1), :]
+                    DSP_tab_vrai[i]
 
     # -----------------------------------------------------------------
     # MAINTENANT ON PEUT ECRIRE err_recons !!!!
@@ -664,7 +659,6 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
         arg_f = fy / fx
     arg_f[0, 0] = 0  # to get the same as idl (instead of NaN)
     arg_f = np.arctan(arg_f)
-    s = f.shape[0]   # taille lineaire du tableau f
 
     # -------------------------------------------------------------------
     #  PSD turbulente
@@ -672,20 +666,16 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
 
     h_recons = np.atleast_1d(h_recons)
     recons_cn2 = np.atleast_1d(recons_cn2)
-    nb_h_recons = h_recons.size
-    DSP_tab_recons = np.zeros((nb_h_recons * s, s))
-    for i in range(nb_h_recons):
-        DSP_tab_recons[s * i: s * (i + 1), :] = (
-            cst * (recons_cn2[i] ** (-3 / 5) * r0ref / err_R0) ** (-5 / 3) *
-            (f ** 2 + (1 / L0) ** 2) ** (-11 / 6))
+    DSP_tab_recons = (
+        cst *
+        (recons_cn2[:, None, None] ** (-3 / 5) * r0ref / err_R0) ** (-5 / 3) *
+        (f ** 2 + (1 / L0) ** 2) ** (-11 / 6))
 
     hh = np.atleast_1d(hh)
     Cn2 = np.atleast_1d(Cn2)
-    DSP_tab_vrai = np.zeros((hh.size * s, s))
-    for i in range(hh.size):
-        DSP_tab_vrai[s * i: s * (i + 1), :] = (
-            cst * (Cn2[i] ** (-3 / 5) * r0ref) ** (-5 / 3) *
-            (f ** 2 + (1 / L0) ** 2) ** (-11 / 6))
+    DSP_tab_vrai = (
+        cst * (Cn2[:, None, None] ** (-3 / 5) * r0ref) ** (-5 / 3) *
+        (f ** 2 + (1 / L0) ** 2) ** (-11 / 6))
 
     # -----------------------------------------------------
     # CALCUL DE LA MATRICE de commande GLAO
@@ -779,31 +769,33 @@ def psf_muse(psd, lambdamuse, verbose=False):
     pixcale = 0.2
     psfall = np.zeros((nl, dimpsf, dimpsf))
 
+    FoV = (lambdamuse / (2 * D)) * dim / (4.85 * 1e3)   # = champ total
+    npixc = (np.round(((dimpsf * pixcale * 2 * 8 * 4.85 * 1000) /
+                       lambdamuse) / 2) * 2).astype(int)
+    lbda = lambdamuse * 1.e-9
+
     for i in range(nl):
-        print('lambda {:.1f}'.format(lambdamuse[i]))
-        FoV = (lambdamuse[i] / (2 * D)) * dim / (4.85 * 1e3)   # = champ total
-        npixc = int(round((dimpsf * pixcale /
-                           (lambdamuse[i] / (2 * 8) / 4.85 / 1000)) / 2) * 2)
-        lbda = lambdamuse[i] * 1.e-9
+        if verbose:
+            print('lambda {:.1f}'.format(lambdamuse[i]))
         if ndir != 1:
-            psf = np.zeros((ndir, npixc, npixc))
+            psf = np.zeros((ndir, npixc[i], npixc[i]))
             for j in range(ndir):
-                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda, samp=samp,
-                                         FoV=FoV, verbose=verbose),
-                              center=psf.shape[0] // 2, size=npixc // 2)
+                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
+                                         FoV=FoV[i], verbose=verbose),
+                              center=psf.shape[0] // 2, size=npixc[i] // 2)
             psf = psf.mean(axis=0)
         else:
-            psf = psd_to_psf(psd, pup, D, lbda, samp=samp, FoV=FoV,
+            psf = psd_to_psf(psd, pup, D, lbda[i], samp=samp, FoV=FoV[i],
                              verbose=verbose)
-            psf = crop(psf, center=psf.shape[0] // 2, size=npixc // 2)
+            psf = crop(psf, center=psf.shape[0] // 2, size=npixc[i] // 2)
 
         psf /= psf.sum()
         np.maximum(psf, 0, out=psf)
 
-        pos = np.mgrid[:dimpsf, :dimpsf] * npixc / dimpsf
+        pos = np.mgrid[:dimpsf, :dimpsf] * npixc[i] / dimpsf
         psfall[i] = interpolate(psf, pos, method='linear')
-        psfall[i] = psfall[i] / psfall[i].sum()
 
+    psfall /= psfall.sum(axis=(1, 2))[:, None, None]
     return psfall
 
 
@@ -837,10 +829,10 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
 
     # from PSD to structure function
-    bg = ifft2(fftshift(psd * convnm**2)) * psd.size / L**2
+    bg = ifft2(fftshift(psd * convnm**2)) * (psd.size / L**2)
 
     # creation of the structure function
-    Dphi = np.real(2 * (bg[0, 0] - bg))
+    Dphi = 2 * (bg[0, 0].real - bg.real)
     Dphi = fftshift(Dphi)
 
     # Extraction of the pupil part of the structure function
@@ -915,12 +907,12 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     dlFTO = fft2(np.abs(ifft2(tab))**2)
     dlFTO = fftshift(np.abs(dlFTO) / pup.sum())
 
-    # creation of A OTF
-    aoFTO = np.exp(-Dphi2 / 2)
+    # creation of A OTF (aoFTO = np.exp(-Dphi2 / 2))
+    Dphi2 *= - 0.5
+    np.exp(Dphi2, out=Dphi2)
 
     # Computation of final OTF
-    sysFTO = aoFTO * dlFTO
-    sysFTO = fftshift(sysFTO)
+    sysFTO = fftshift(Dphi2 * dlFTO)
 
     # Computation of final PSF
     sysPSF = np.real(fftshift(ifft2(sysFTO)))
@@ -989,8 +981,10 @@ if __name__ == "__main__":
     npsflin = 3
     dim = 1280
 
+    t0 = time()
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=visu,
                         verbose=verbose, npsflin=npsflin, dim=dim)
+    print('simul_psd_wfm done, {:.1f} sec.'.format(time() - t0))
 
     # et voila la/les PSD
     # on moyenne les PSD .. c'ets preque la meme chose que la moyenne des
@@ -999,6 +993,7 @@ if __name__ == "__main__":
 
     from astropy.io import fits
     fits.writeto('psd_mean.fits', psdm, overwrite=True)
+    print('mean psd saved to psd_mean.fits')
 
     if visu:
         compare_psf(fits.getdata('idl/psd_mean.fits'), psdm, savefig='psd.pdf',
@@ -1011,8 +1006,11 @@ if __name__ == "__main__":
     nl = 35
     lbda = np.linspace(lambdamin, lambdamax, nl)
 
+    t0 = time()
     psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
+    print('psf_muse done, {:.1f} sec.'.format(time() - t0))
     fits.writeto('psf.fits', psf, overwrite=True)
+    print('psf saved to psf.fits')
 
     if visu:
         compare_psf(fits.getdata('idl/psf.fits')[1], psf[1],
