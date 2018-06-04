@@ -10,6 +10,7 @@ d'onde avec un pixel scale de 0.2 arcsec.
 import matplotlib.pyplot as plt
 import numpy as np
 import sys
+from astropy.io import fits
 from math import gamma
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
@@ -44,7 +45,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     vent = np.full_like(h, 12.5)
 
     np.random.seed(12345)
-    arg_v = (np.random.rand(h.shape[0]) - 0.5) * np.pi  # wind dir.  [rad]
+    # arg_v = (np.random.rand(h.shape[0]) - 0.5) * np.pi  # wind dir.  [rad]
+    arg_v = np.array([0.628163, -0.326497])  # from IDL
 
     # Step 0.2 : Systeme
     # ---------
@@ -197,7 +199,7 @@ def calc_var_from_psd(psd, pixsize, Dpup):
     return np.sum(psdtemp * mask)
 
 
-def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
+def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, poslgs,
                              sigr, DSP_tab_recons, h_recons, seuil,
                              condmax, LSE=False):  # h_dm, Wflag=None,
     """Computes the reconstruction matrix WMAP.
@@ -212,8 +214,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     ----------
     f = spatial frequencies array
     arg_f = F phase
-    Nb_gs = Guide star number
-    alpha = Guide stars positions
+    poslgs = Guide stars positions
     #theta = Optimisation directions
     sigr = A priori on noise associated to each GS
     DSP_Tab_recons = A priori, DSP on estimated turbulent layers
@@ -258,24 +259,17 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     # Cphi = a priori on turbulence profile
 
     # Brique 1 : M.Palpha'
+    nb_gs = poslgs.shape[1]
     nb_h_recons = h_recons.size
-    Mr = np.zeros((nb_h_recons * s, nb_gs * s), dtype=complex)
+    Mr = np.zeros((nb_h_recons, nb_gs, s, s), dtype=complex)
     for j in range(nb_gs):
         for i in range(nb_h_recons):
             # FIXME: 206265 c'est quoi ca ?
-            ff_x = f_x * alpha[0, j] * h_recons[i] * 60 / 206265
-            ff_y = f_y * alpha[1, j] * h_recons[i] * 60 / 206265
-            Mr[i * s:(i + 1) * s, j * s:(j + 1) * s] = (
-                wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
+            ff_x = f_x * poslgs[0, j] * h_recons[i] * 60 / 206265
+            ff_y = f_y * poslgs[1, j] * h_recons[i] * 60 / 206265
+            Mr[i, j] = wfs[j] * np.exp(1j * 2 * np.pi * (ff_x + ff_y))
 
     wfs = None
-
-    # Transpose
-    Mr_t = np.zeros((nb_gs * s, nb_h_recons * s), dtype=complex)
-    for i in range(nb_h_recons):
-        for j in range(nb_gs):
-            Mr_t[j * s:(j + 1) * s, i * s:(i + 1) * s] = \
-                Mr[i * s:(i + 1) * s, j * s:(j + 1) * s].conj()
 
     # Wtomo, with its two forms :
     # 1: Wtomo = ((Mrt#Cb_inv_recons#Mr + Cphi_inv_recons)^-1)Mrt#Cb_inv_recons
@@ -292,40 +286,32 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     Cb_inv_recons = 1 / sigr
 
     # Cphi-1, a priori on turbulence layers, computed from DSP_tab_recons
-    Cphi_inv_recons = np.zeros((nb_h_recons * s, nb_h_recons * s))
-    for i in range(nb_h_recons):
-        Cphi_inv_recons[s * i:s * (i + 1), s * i:s * (i + 1)] = \
-                    1. / DSP_tab_recons[i]
-
-    # Filtering of piston in reconstruction :
-    Cphi_inv_recons[0, 0] = 0.
-
-    if LSE:
-        Cphi_inv_recons *= 0.
+    if not LSE:
+        Cphi_inv_recons = np.zeros((nb_h_recons, nb_h_recons, s, s))
+        for i in range(nb_h_recons):
+            Cphi_inv_recons[i, i] = 1. / DSP_tab_recons[i]
+        # Filtering of piston in reconstruction :
+        Cphi_inv_recons[0, 0, 0, 0] = 0.
 
     # W1 = ((Mrt#Cb_inv_recons#Mr + Cphi_inv_recons)^-1)Mrt#Cb_inv_recons
     # ----------------------------------------------------------------------
     # Mrt#Cb_inv first
-    res_tmp = np.zeros_like(Mr_t)
+    res_tmp = np.zeros_like(Mr)
     for i in range(nb_gs):
-        si = slice(i * s, (i + 1) * s)
         for j in range(nb_h_recons):
-            sj = slice(j * s, (j + 1) * s)
-            res_tmp[si, sj] += Mr_t[si, sj] * Cb_inv_recons[i]
+            res_tmp[j, i] += Mr[j, i].conj() * Cb_inv_recons[i]
 
     # Mrt#Cb_inv#Mr then :
-    model_r = np.zeros((nb_h_recons * s, nb_h_recons * s), dtype=complex)
+    MAP = np.zeros((nb_h_recons, nb_h_recons, s, s), dtype=complex)
     for k in range(nb_gs):
-        sk = slice(k * s, (k + 1) * s)
         for i in range(nb_h_recons):
-            si = slice(i * s, (i + 1) * s)
             for j in range(nb_h_recons):
-                sj = slice(j * s, (j + 1) * s)
-                model_r[si, sj] += res_tmp[sk, sj] * Mr[si, sk]
+                MAP[i, j] += res_tmp[j, k] * Mr[i, k]
 
     # to be inversed :
-    MAP = model_r + Cphi_inv_recons
-    model_r = Cphi_inv_recons = None
+    if not LSE:
+        MAP += Cphi_inv_recons
+        Cphi_inv_recons = None
 
     # ---------------------------------------------------------------------
     # Without a priori, this is WLSE
@@ -336,9 +322,7 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
     tmp = np.zeros((nb_h_recons, nb_h_recons), dtype=complex)
     for j in range(s):
         for i in range(s):
-            for k in range(nb_h_recons):
-                for l in range(nb_h_recons):
-                    tmp[k, l] = MAP[i + k * s, j + l * s]
+            tmp = MAP[..., i, j]
 
             # inversion of each sub matrix
             if tmp.sum() != 0:
@@ -352,26 +336,20 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, nb_gs, alpha,
                 if i == 0 and j == 0:
                     tmp_inv[:] = 0
 
-                for k in range(nb_h_recons):
-                    for l in range(nb_h_recons):
-                        inv[i + k * s, j + l * s] = tmp_inv[k, l]
-
-    MAP = 0
+                inv[..., i, j] = tmp_inv
+    MAP = None
 
     # Last step W1 = inv#res_tmp
-    W1 = np.zeros((nb_gs * s, nb_h_recons * s), dtype=complex)
+    W1 = np.zeros((nb_gs, nb_h_recons, s, s), dtype=complex)
     for i in range(nb_gs):
-        si = slice(i * s, (i + 1) * s)
         for j in range(nb_h_recons):
-            sj = slice(j * s, (j + 1) * s)
             for k in range(nb_h_recons):
-                sk = slice(k * s, (k + 1) * s)
-                W1[si, sj] += inv[sk, sj] * res_tmp[si, sk]
+                W1[i, j] += inv[k, j] * res_tmp[k, i]
 
     return W1
 
 
-def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
+def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
                              DSP_tab_vrai, h_vrai, h_dm, Wmap, td, ti, wind,
                              tempo=False, fitting=False, err_recons=None,
                              err_noise=None):
@@ -395,9 +373,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
         argument de f
     pitchs_wfs :
         tableau des pitchs WFS
-    nb_gs :
-        Nbre d'etoiles Guides
-    alpha :
+    poslgs :
         position des etoiles Guides dans le champs (en cartesien (x,y) et en
         arcmin)
     Beta :
@@ -427,6 +403,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     f_y = f * np.sin(arg_f)
     s = f.shape[0]
     nb_h_vrai = h_vrai.size
+    nb_gs = poslgs.shape[1]
 
     # ici on ecrit tous les termes de la DSP residuelle :
     # 1. L'erreur de reconstruction
@@ -459,14 +436,13 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     # FIXME missing parenthesis around | ? > vs >= ?
     wfs[(f != 0) & (np.abs(f_x) > fc) | (np.abs(f_y) > fc)] = 0.
 
-    Mv = np.zeros((nb_h_vrai * s, nb_gs * s), dtype=complex)
+    Mv = np.zeros((nb_h_vrai, nb_gs, s, s), dtype=complex)
     for i in range(nb_h_vrai):
         for j in range(nb_gs):
-            ff_x = f_x * alpha[0, j] * h_vrai[i] * 60 / 206265
-            ff_y = f_y * alpha[1, j] * h_vrai[i] * 60 / 206265
+            ff_x = f_x * poslgs[0, j] * h_vrai[i] * 60 / 206265
+            ff_y = f_y * poslgs[1, j] * h_vrai[i] * 60 / 206265
             www = np.sinc(wind[0, i] * ti[j] * f_x + wind[1, i] * ti[j] * f_y)
-            Mv[i * s:(i + 1) * s, j * s:(j + 1) * s] = (
-                www * wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi))
+            Mv[i, j] = www * wfs[j] * np.exp(1j * 2 * (ff_x + ff_y) * np.pi)
     wfs = None
 
     # ensuite, faut ecrire PbetaL#
@@ -494,16 +470,12 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     # PbetaDM#WMAP c'est un vecteur qui fait Ngs
     proj_tmp = np.zeros((nb_gs, s, s), dtype=complex)
     for i in range(nb_gs):
-        for k in range(nb_h_dm):
-            proj_tmp[i] += (proj_betaDM[k] *
-                            Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
+        proj_tmp[i] = np.sum(proj_betaDM * Wmap[i], axis=0)  # sum on nb_h_dm
 
     # Puis, on ecrit proj_tmp#Mv
     proj_tmp2 = np.zeros((nb_h_vrai, s, s), dtype=complex)
     for i in range(nb_h_vrai):
-        for k in range(nb_gs):
-            proj_tmp2[i] += (proj_tmp[k] *
-                             Mv[i * s:(i + 1) * s, k * s:(k + 1) * s])
+        proj_tmp2[i] = np.sum(proj_tmp * Mv[i], axis=0)  # sum on nb_gs
 
     # Puis (PbetaL - proj) ca sera le projecteur qu'on appliquera a Cphi pour
     # trouver l'erreur de reconstruction
@@ -534,9 +506,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
     # Faut deja ecrire PbetaDM#Wmap
     proj_noise = np.zeros((nb_gs, s, s), dtype=complex)
     for i in range(nb_gs):
-        for k in range(nb_h_dm):
-            proj_noise[i] += (proj_betaDM[k] *
-                              Wmap[i * s:(i + 1) * s, k * s:(k + 1) * s])
+        proj_noise[i] = np.sum(proj_betaDM * Wmap[i], axis=0)  # sum on nb_h_dm
 
     # -----------------------------------------------------------------------
     # MAINTENANT ON PEUT ECRIRE err_noise !!!!
@@ -561,14 +531,14 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, nb_gs, alpha, beta, sigv,
 
 
 def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
-             vent, arg_v, seuil, LAW, nsspup, nact, Fsamp, delay, bruitLGS2,
+             vent, arg_v, seuil, law, nsspup, nact, Fsamp, delay, bruitLGS2,
              lambdaref, poslgs, dirperf, verbose=False):
 
     # Passage en arcmin
     poslgs1 = poslgs / 60
     dirperf1 = dirperf / 60
 
-    LSE = (LAW == 'LSE')  # mmse ou lse
+    LSE = (law == 'LSE')  # mmse ou lse
     tempo = True          # erreur temporelle
     fitting = True        # fitting
     dimall = int(dimall)
@@ -620,9 +590,9 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
     ti = 1 / fech_tab
     td = delay * 1.e-3
 
-    Wmap = calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_DM, nb_gs,
-                                    poslgs1, sig2, DSP_tab_recons, h_recons,
-                                    seuil, condmax, LSE=LSE)
+    Wmap = calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_DM, poslgs1,
+                                    sig2, DSP_tab_recons, h_recons, seuil,
+                                    condmax, LSE=LSE)
 
     # DSP dans les differentes directions de reconstruction
     # =======================================================
@@ -637,15 +607,17 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
         beta = dirperf1[:, bbb]
         # DSP tempo + noise-tomp + fitting
         dsp_res = calc_dsp_res_glao_finale(
-            f, arg_f, pitchs_wfs, nb_gs, poslgs1, beta, sig2, DSP_tab_vrai,
+            f, arg_f, pitchs_wfs, poslgs1, beta, sig2, DSP_tab_vrai,
             hh, h_dm, Wmap, td, ti, wind, tempo=tempo, fitting=fitting)
         dsp[bbb, :, :] = dsp_res
 
         if verbose:
             resval = calc_var_from_psd(dsp_res, pixsize, Dpup)
-            print(bbb, np.sqrt(resval) * lambdaref * 1e3 / 2. / np.pi)
+            print(bbb, np.sqrt(resval) * lambdaref * 1e3 / (2 * np.pi))
 
-    return dsp
+    # The above was ported from IDL with inverse rows/columns convention, so we
+    # transpose the array here.
+    return np.moveaxis(dsp, -1, -2)
 
 
 def psd_fit(dim, L, r0, L0, fc):
@@ -883,7 +855,7 @@ def compare_psf(arr1, arr2, size=None, title='', savefig=None):
         axes[-1].plot(center[1:], radial_prof[1:], lw=1)
     axes[-1].set_yscale('log')
 
-    for ax, t in zip(axes, ('IDL', 'Python', 'Py - IDL', 'radial profile')):
+    for ax, t in zip(axes, ('a', 'b', 'a - b', 'radial profile')):
         ax.set_title(t)
     fig.suptitle(title)
     if savefig:
@@ -894,8 +866,21 @@ def compare_psf(arr1, arr2, size=None, title='', savefig=None):
 if __name__ == "__main__":
     visu = '--visu' in sys.argv
     verbose = '--verbose' in sys.argv
-    if visu:
+    compare = '--compare' in sys.argv
+    if compare or visu:
         plt.rcParams.update({'font.family': 'serif', 'text.usetex': True})
+
+    if compare:
+        dir1, dir2 = sys.argv[2:4]
+        compare_psf(fits.getdata(dir1 + '/psd_mean.fits'),
+                    fits.getdata(dir2 + '/psd_mean.fits'),
+                    savefig='psd.pdf',
+                    size=40, title='Comparison of mean PSD')
+        compare_psf(fits.getdata(dir1 + '/psf.fits')[1],
+                    fits.getdata(dir2 + '/psf.fits')[1],
+                    title='Comparison of PSF @500nm', savefig='psf.pdf')
+        input('Press Enter to exit')
+        sys.exit()
 
     seeing = 1.
     L0 = 25.
@@ -909,23 +894,15 @@ if __name__ == "__main__":
     t0 = time()
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=visu,
                         verbose=verbose, npsflin=npsflin, dim=dim)
-    print('simul_psd_wfm done, {:.1f} sec.'.format(time() - t0))
+    print('simul_psd_wfm done, {:.1f} sec., saving to psd_mean.fits'
+          .format(time() - t0))
 
-    # et voila la/les PSD
-    # on moyenne les PSD .. c'ets preque la meme chose que la moyenne des
-    # PSF ... et ca permet d'aller npsflin^2 fois plus vite
+    # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme chose
+    # que la moyenne des PSF ... et ca permet d'aller npsflin^2 fois plus vite
     psdm = np.mean(psd, axis=0)
-
-    from astropy.io import fits
     fits.writeto('psd_mean.fits', psdm, overwrite=True)
-    print('mean psd saved to psd_mean.fits')
-
-    if visu:
-        compare_psf(fits.getdata('idl/psd_mean.fits'), psdm, savefig='psd.pdf',
-                    size=40, title='Comparison of mean PSD')
 
     # Passage PSD --> PSF
-    # ===================
     lambdamin = 490
     lambdamax = 930
     nl = 35
@@ -933,11 +910,5 @@ if __name__ == "__main__":
 
     t0 = time()
     psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
-    print('psf_muse done, {:.1f} sec.'.format(time() - t0))
+    print('psf_muse done, {:.1f} sec., saving to psf.fits'.format(time() - t0))
     fits.writeto('psf.fits', psf, overwrite=True)
-    print('psf saved to psf.fits')
-
-    if visu:
-        compare_psf(fits.getdata('idl/psf.fits')[1], psf[1],
-                    title='Comparison of PSF @500nm', savefig='psf.pdf')
-        input('Press Enter to exit')
