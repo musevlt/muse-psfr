@@ -44,6 +44,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     h = np.array(h)
     vent = np.full_like(h, 12.5)
 
+    # FIXME: currently set to IDL values for reproducability
     np.random.seed(12345)
     # arg_v = (np.random.rand(h.shape[0]) - 0.5) * np.pi  # wind dir.  [rad]
     arg_v = np.array([0.628163, -0.326497])  # from IDL
@@ -113,17 +114,16 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # => important pour les normalisations
     # L = dim / Dimpup * Dpup
 
-    nact1 = 30.  # FIXME: not the same as nact/nssspup ?
+    nact1 = 30             # FIXME: not the same as nact/nssspup ?
     pitch = Dpup / nact1   # pitch: inter-actuator distance [m]
-    fc = 1. / (2 * pitch)  # pItch frequency (1/2a)  [m^{-1}]
+    fc = 1 / (2 * pitch)   # pItch frequency (1/2a)  [m^{-1}]
 
     # STEP 1 : Simulation des PSF LGS (tilt inclus)
     # ===============================================
     # cube de DSP pour chaque direction d'interet - ZONE DE CORRECTION ONLY
     dsp = dsp4muse(Dpup, Dimpup, Dimpup * 2, Cn2, h, L0, r0ref, recons_cn2,
-                   recons_h, vent, arg_v, 1000, law, nsspup, nact, Fsamp,
-                   delay, bruitLGS2, lambdaref, poslgs, dirperf,
-                   verbose=verbose)
+                   recons_h, vent, arg_v, law, nsspup, nact, Fsamp, delay,
+                   bruitLGS2, lambdaref, poslgs, dirperf, verbose=verbose)
 
     # STEP 2: Calcul DSP fitting
     # ===============================================
@@ -134,7 +134,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     sl = slice(dim // 2 - Dimpup, dim // 2 + Dimpup)
     dspf[:, sl, sl] = np.maximum(dspa[sl, sl], fftshift(dsp, axes=(1, 2)))
 
-    return dspf * (lambdaref * 1000. / (2. * np.pi)) ** 2
+    return dspf * (lambdaref * 1000 / (2 * np.pi)) ** 2
 
 
 def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
@@ -144,15 +144,12 @@ def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
 
     if visu:
         champvisu = np.max(dirperf)
-        if lgs is not None:
-            champvisu = max(champvisu, lgs.max())
-        if ngs is not None:
-            champvisu = max(champvisu, ngs.max())
-
         plt.scatter(dirperf[0], dirperf[1], marker='o', s=10)
         if lgs is not None:
+            champvisu = max(champvisu, lgs.max())
             plt.scatter(lgs[0], lgs[1], marker='*', s=60)
         if ngs is not None:
+            champvisu = max(champvisu, ngs.max())
             plt.scatter(ngs[0], ngs[1], marker='*', s=40)
 
         plt.xlim((-1.25 * champvisu, 1.25 * champvisu))
@@ -167,7 +164,7 @@ def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
 def seeing2r01(seeing, lbda, zenith):
     """seeing @ 0.5 microns, lambda en microns."""
     r00p5 = 0.976 * 0.5 / seeing / 4.85  # r0 @ 0.5 µm
-    r0 = r00p5 * (lbda / 0.5) ** (6 / 5) * np.cos(np.deg2rad(zenith)) ** (3 / 5)
+    r0 = r00p5 * (lbda * 2) ** (6 / 5) * np.cos(np.deg2rad(zenith)) ** (3 / 5)
     return r0
 
 
@@ -200,11 +197,9 @@ def calc_var_from_psd(psd, pixsize, Dpup):
 
 
 def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, poslgs,
-                             sigr, DSP_tab_recons, h_recons, seuil,
-                             condmax, LSE=False):  # h_dm, Wflag=None,
-    """Computes the reconstruction matrix WMAP.
-
-    accounting for all reconstruction parameters::
+                             sigr, DSP_tab_recons, h_recons, LSE=False):
+    """Computes the reconstruction matrix WMAP, accounting for all
+    reconstruction parameters::
 
         WMAP = Ptomo ## Wtomo
 
@@ -215,12 +210,9 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, poslgs,
     f = spatial frequencies array
     arg_f = F phase
     poslgs = Guide stars positions
-    #theta = Optimisation directions
     sigr = A priori on noise associated to each GS
     DSP_Tab_recons = A priori, DSP on estimated turbulent layers
     h_recons = Altitudes of reconstructed layers
-    #h_dm : DM altitude (if not pure tomo)
-    condmax : Max acceptable conditionning in inversion for POPT computation
     #Wflag : Choice of reconstructor W1 or W2
     Keyword Tomo : Pure tomo
     Popt : output : optimal projector for MCAO, used later for Aliasing
@@ -328,6 +320,9 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, poslgs,
             if tmp.sum() != 0:
                 if nb_h_recons > 1:
                     # FIXME: not ported yet! numpy.linalg.pinv ?
+                    # condmax : Max acceptable conditionning in inversion for
+                    # POPT computation
+                    # condmax = 1e6
                     la_tsvd(mat=tmp, inverse=tmp_inv, condmax=seuil,
                             silent=True)
                 else:
@@ -367,36 +362,24 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
 
     Parameters
     ----------
-    f :
-        tableau des frequences spatiales
-    arg_f :
-        argument de f
-    pitchs_wfs :
-        tableau des pitchs WFS
-    poslgs :
-        position des etoiles Guides dans le champs (en cartesien (x,y) et en
+    f = tableau des frequences spatiales
+    arg_f = argument de f
+    pitchs_wfs = tableau des pitchs WFS
+    poslgs = position des etoiles Guides dans le champs (en cartesien (x,y)
+        et en arcmin)
+    Beta = position ou on evalue la performance (en cartesien (x,y) et en
         arcmin)
-    Beta :
-        position ou on evalue la performance (en cartesien (x,y) et en arcmin)
-    sigv :
-        Bruit "Vrai", i.e., le bruit associé a chaque GS, qu'on utilise dans le
-        calcul de Cb.
-    DSP_tab_vrai :
-        tableau qui contient les DSPs couches a couches de la vraie turbulence
-        introduite.
-    h_vrai :
-        altitudes des couches du vrai profil
-    h_dm :
-        altitude des DMs
-    Wmap :
-        C'est la big Matrice de reconstruction Tomographique, elle doit sortir
-        de calc_mat_rec_finale.pro
-    td :
-        delai
-    ti :
-        tableau des temps d'integration des WFS
-    Wind :
-        tableau vents
+    sigv = Bruit "Vrai", i.e., le bruit associé a chaque GS, qu'on utilise
+        dans le calcul de Cb.
+    DSP_tab_vrai = tableau qui contient les DSPs couches a couches de la
+        vraie turbulence introduite.
+    h_vrai = altitudes des couches du vrai profil
+    h_dm = altitude des DMs
+    Wmap = C'est la big Matrice de reconstruction Tomographique, elle doit
+        sortir de calc_mat_rec_finale.pro
+    td = delai
+    ti = tableau des temps d'integration des WFS
+    Wind = tableau vents
 
     """
     f_x = f * np.cos(arg_f)
@@ -531,7 +514,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
 
 
 def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
-             vent, arg_v, seuil, law, nsspup, nact, Fsamp, delay, bruitLGS2,
+             vent, arg_v, law, nsspup, nact, Fsamp, delay, bruitLGS2,
              lambdaref, poslgs, dirperf, verbose=False):
 
     # Passage en arcmin
@@ -576,9 +559,6 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
     # CALCUL DE LA MATRICE de commande GLAO
     # -----------------------------------------------------
 
-    if verbose:
-        print('seuil = ', seuil)
-
     nb_gs = poslgs1.shape[1]
     pitchs_wfs = np.repeat(Dpup / nsspup, nb_gs)
     sig2 = np.repeat(bruitLGS2, nb_gs)
@@ -586,13 +566,11 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
 
     pitchs_DM = Dpup / nact
     h_dm = 1.
-    condmax = 1e6
     ti = 1 / fech_tab
     td = delay * 1.e-3
 
     Wmap = calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_DM, poslgs1,
-                                    sig2, DSP_tab_recons, h_recons, seuil,
-                                    condmax, LSE=LSE)
+                                    sig2, DSP_tab_recons, h_recons, LSE=LSE)
 
     # DSP dans les differentes directions de reconstruction
     # =======================================================
@@ -697,7 +675,7 @@ def psf_muse(psd, lambdamuse, verbose=False):
 
 
 def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
-               verbose=False):
+               return_all=False, verbose=False):
     """Computation of a PSF from a residual phase PSD and a pupil shape.
 
     Programme pour prendre en compte la multi-analyse les geometries
@@ -815,10 +793,11 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     sysPSF = np.real(fftshift(ifft2(sysFTO)))
     sysPSF /= sysPSF.sum()  # normalisation to 1
 
-    # FIXME: remove this or add option to return these values?
-    samp = sampout
-    FoV = FoVnum * dimover / dim
-    return sysPSF
+    if return_all:
+        FoV = FoVnum * dimover / dim
+        return sysPSF, sampout, FoV
+    else:
+        return sysPSF
 
 
 def radial_profile(arr, binsize=1):
