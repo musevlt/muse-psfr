@@ -156,7 +156,7 @@ def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
         plt.ylim((-1.25 * champvisu, 1.25 * champvisu))
         plt.xlabel('arcsecond')
         plt.ylabel('arcsecond')
-        plt.show(block=False)
+        plt.show()
 
     return dirperf
 
@@ -816,50 +816,43 @@ def radial_profile(arr, binsize=1):
     return bin_centers, radial_prof / nr
 
 
-def compare_psf(arr1, arr2, size=None, title='', savefig=None):
+def plot_psf(lbda, psf, savefig=None):
     from matplotlib.colors import LogNorm
-    if size:
-        center = arr1.shape[0] // 2
-        arr1 = crop(arr1, center, size) / arr1.max()
-        arr2 = crop(arr2, center, size) / arr2.max()
 
-    fig, axes = plt.subplots(1, 4, figsize=(14, 3), tight_layout=True)
-    for i, (ax, arr) in enumerate(zip(axes, (arr1, arr2, arr2 - arr1))):
-        kw = dict(norm=LogNorm(), vmax=1) if i < 2 else {}
-        im = ax.imshow(arr, origin='lower', **kw)
-        fig.colorbar(im, ax=ax)
+    fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
+    ax1, ax2, ax3, ax4 = axes.flat
+    im = ax1.imshow(psf[1], origin='lower', norm=LogNorm())
+    fig.colorbar(im, ax=ax1)
+    ax1.set_title('PSF @500nm')
 
-    for arr in (arr1, arr2):
-        center, radial_prof = radial_profile(arr)
-        axes[-1].plot(center[1:], radial_prof[1:], lw=1)
-    axes[-1].set_yscale('log')
+    center, radial_prof = radial_profile(psf[1])
+    ax2.plot(center[1:], radial_prof[1:], lw=1)
+    ax2.set_yscale('log')
+    ax2.set_title('radial profile')
 
-    for ax, t in zip(axes, ('a', 'b', 'a - b', 'radial profile')):
-        ax.set_title(t)
-    fig.suptitle(title)
+    from mpdaf.obj import Cube
+    psf = Cube(data=psf, copy=False)
+    fwhm, beta = [], []
+    for im in psf:
+        fit = im.moffat_fit(unit_center=None, unit_fwhm=None,
+                            circular=True, fit_back=False)
+        fwhm.append(fit.fwhm[0])
+        beta.append(fit.n)
+
+    ax3.plot(lbda, fwhm)
+    ax3.set_title(r'$FWHM(\lambda)$')
+    ax4.plot(lbda, beta)
+    ax4.set_title(r'$\beta(\lambda)$')
+
     if savefig:
         fig.savefig(savefig)
-    plt.show(block=False)
 
 
 if __name__ == "__main__":
     visu = '--visu' in sys.argv
     verbose = '--verbose' in sys.argv
-    compare = '--compare' in sys.argv
-    if compare or visu:
+    if visu:
         plt.rcParams.update({'font.family': 'serif', 'text.usetex': True})
-
-    if compare:
-        dir1, dir2 = sys.argv[2:4]
-        compare_psf(fits.getdata(dir1 + '/psd_mean.fits'),
-                    fits.getdata(dir2 + '/psd_mean.fits'),
-                    savefig='psd.pdf',
-                    size=40, title='Comparison of mean PSD')
-        compare_psf(fits.getdata(dir1 + '/psf.fits')[1],
-                    fits.getdata(dir2 + '/psf.fits')[1],
-                    title='Comparison of PSF @500nm', savefig='psf.pdf')
-        input('Press Enter to exit')
-        sys.exit()
 
     seeing = 1.
     L0 = 25.
@@ -871,7 +864,7 @@ if __name__ == "__main__":
     dim = 1280
 
     t0 = time()
-    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=visu,
+    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=False,
                         verbose=verbose, npsflin=npsflin, dim=dim)
     print('simul_psd_wfm done, {:.1f} sec., saving to psd_mean.fits'
           .format(time() - t0))
@@ -891,3 +884,7 @@ if __name__ == "__main__":
     psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
     print('psf_muse done, {:.1f} sec., saving to psf.fits'.format(time() - t0))
     fits.writeto('psf.fits', psf, overwrite=True)
+
+    if visu:
+        plot_psf(lbda, psdm, psf, savefig='psf.pdf')
+        plt.show()
