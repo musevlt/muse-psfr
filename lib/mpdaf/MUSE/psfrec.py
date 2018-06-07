@@ -1,5 +1,7 @@
 """PSF reconstruction for MUSE WFM.
 
+FIXME: Add Authors, etc.
+
 Le programme simul_psd_wfm crée un jeu de DSP (par direction du champ).
 
 le programme psf_muse utilise ces DSP pour créer des PSF a chaque longueur
@@ -9,9 +11,11 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 import matplotlib.pyplot as plt
 import numpy as np
-import sys
 from astropy.io import fits
+from astropy.table import Table, Column
 from math import gamma
+from matplotlib.colors import LogNorm
+from mpdaf.obj import Cube
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
 from time import time
@@ -365,18 +369,13 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
     f = tableau des frequences spatiales
     arg_f = argument de f
     pitchs_wfs = tableau des pitchs WFS
-    poslgs = position des etoiles Guides dans le champs (en cartesien (x,y)
-        et en arcmin)
-    Beta = position ou on evalue la performance (en cartesien (x,y) et en
-        arcmin)
-    sigv = Bruit "Vrai", i.e., le bruit associé a chaque GS, qu'on utilise
-        dans le calcul de Cb.
-    DSP_tab_vrai = tableau qui contient les DSPs couches a couches de la
-        vraie turbulence introduite.
+    poslgs = position des etoiles Guides dans le champ ((x,y) en arcmin)
+    Beta = position ou on evalue la performance ((x,y) en arcmin)
+    sigv = bruit associé a chaque GS, utilisé dans le calcul de Cb.
+    DSP_tab_vrai = DSPs couches a couches de la vraie turbulence introduite.
     h_vrai = altitudes des couches du vrai profil
     h_dm = altitude des DMs
-    Wmap = C'est la big Matrice de reconstruction Tomographique, elle doit
-        sortir de calc_mat_rec_finale.pro
+    Wmap = Matrice de reconstruction Tomographique, from calc_mat_rec_finale
     td = delai
     ti = tableau des temps d'integration des WFS
     Wind = tableau vents
@@ -698,12 +697,11 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     L = D * sampnum       # Physical size of the PSD
 
     if dim < 2 * npup:
-        print("the PSd horizon must at least two time larger than the "
+        print("the PSD horizon must be at least two time larger than the "
               "pupil diameter")
 
-    convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
-
     # from PSD to structure function
+    convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
     bg = ifft2(fftshift(psd * convnm**2)) * (psd.size / L**2)
 
     # creation of the structure function
@@ -711,9 +709,7 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     Dphi = fftshift(Dphi)
 
     # Extraction of the pupil part of the structure function
-
     sampin = samp if samp is not None else sampnum
-
     if samp < 2:
         print('PSF should be at least nyquist sampled')
 
@@ -734,9 +730,9 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
         print('WARNING : Samplig > Dim DSP / Dim pup => extrapolation !!! '
               'We recommmend to increase the PSD size')
 
-    if verbose:
-        print('input sampling: {}, output sampling: {}, max num sampling: {}'
-              .format(sampin, sampout, sampnum))
+    # if verbose:
+    #     print('input sampling: {}, output sampling: {}, max num sampling: {}'
+    #           .format(sampin, sampout, sampnum))
 
     # increasing the FoV PSF means oversampling the pupil
     FoVnum = (lbda / (sampnum * D)) * dim / (4.85 * 1.e-6)
@@ -765,9 +761,9 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
             phase_static = np.maximum(
                 interpolate(phase_static, xxpupover, method='cubic'), 0)
 
-    if verbose:
-        print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
-              .format(FoV, FoVnum * dimover / dimnum, FoVnum))
+    # if verbose:
+    #     print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
+    #           .format(FoV, FoVnum * dimover / dimnum, FoVnum))
 
     if FoV > 2 * FoVnum:
         print('Warning : Potential alisiang issue .. I recommend to create '
@@ -816,9 +812,7 @@ def radial_profile(arr, binsize=1):
     return bin_centers, radial_prof / nr
 
 
-def plot_psf(lbda, psf, savefig=None):
-    from matplotlib.colors import LogNorm
-
+def plot_psf(lbda, psf):
     fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
     ax1, ax2, ax3, ax4 = axes.flat
     im = ax1.imshow(psf[1], origin='lower', norm=LogNorm())
@@ -830,12 +824,11 @@ def plot_psf(lbda, psf, savefig=None):
     ax2.set_yscale('log')
     ax2.set_title('radial profile')
 
-    from mpdaf.obj import Cube
     psf = Cube(data=psf, copy=False)
     fwhm, beta = [], []
     for im in psf:
         fit = im.moffat_fit(unit_center=None, unit_fwhm=None,
-                            circular=True, fit_back=False)
+                            circular=True, fit_back=False, verbose=False)
         fwhm.append(fit.fwhm[0])
         beta.append(fit.n)
 
@@ -844,20 +837,53 @@ def plot_psf(lbda, psf, savefig=None):
     ax4.plot(lbda, beta)
     ax4.set_title(r'$\beta(\lambda)$')
 
-    if savefig:
-        fig.savefig(savefig)
+
+def compute_psf_from_sparta(filename, hdu='SPARTA_ATM_DATA', npsflin=3,
+                            verbose=False):
+    tbl = Table.read(filename, hdu=hdu)
+    nr = len(tbl)
+
+    lambdamin = 490
+    lambdamax = 930
+    nl = 35
+    lbda = np.linspace(lambdamin, lambdamax, nl)
+    hdul = fits.HDUList()
+
+    for i, row in enumerate(tbl, start=1):
+        values = np.array([[row['LGS%d_%s' % (k, col)]
+                            for col in ('SEEING', 'R0', 'L0')]
+                           for k in range(1, 5)])
+        seeing, R0, L0 = values.mean(axis=0)
+        print('{}/{} : seeing={:.2f} L0={:.2f}'.format(i, nr, seeing, L0))
+
+        Cn2 = [0.7, 0.3]
+        h = [500, 15000.]
+        psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
+                            npsflin=npsflin, dim=1280)
+        if npsflin > 1:
+            psd = psd.mean(axis=0)
+        psf = psf_muse(psd, lbda, verbose=verbose)
+        hdul.append(fits.ImageHDU(data=psf, name='PSF%d' % i))
+        psf = Cube(data=psf, copy=False)
+
+        res = [im.moffat_fit(unit_center=None, unit_fwhm=None,
+                             circular=True, fit_back=False, verbose=False)
+               for im in psf]
+        res = Table(rows=[r.__dict__ for r in res])
+        res.remove_columns(('ima', 'rot', 'cont', 'err_rot', 'err_cont'))
+        res['fwhm'] *= 0.2
+        res['err_fwhm'] *= 0.2
+        res.add_column(Column(name='lbda', data=lbda), index=0)
+        hdul.append(fits.BinTableHDU(data=res, name='FIT%d' % i))
+
+    return hdul
 
 
 if __name__ == "__main__":
-    visu = '--visu' in sys.argv
-    verbose = '--verbose' in sys.argv
-    if visu:
-        plt.rcParams.update({'font.family': 'serif', 'text.usetex': True})
 
     seeing = 1.
     L0 = 25.
     Cn2 = [0.7, 0.3]
-
     h = [500, 15000.]
     zenith = 0.
     npsflin = 3
@@ -865,7 +891,7 @@ if __name__ == "__main__":
 
     t0 = time()
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=False,
-                        verbose=verbose, npsflin=npsflin, dim=dim)
+                        verbose=True, npsflin=npsflin, dim=dim)
     print('simul_psd_wfm done, {:.1f} sec., saving to psd_mean.fits'
           .format(time() - t0))
 
@@ -881,10 +907,9 @@ if __name__ == "__main__":
     lbda = np.linspace(lambdamin, lambdamax, nl)
 
     t0 = time()
-    psf = psf_muse(psdm, lbda, verbose=verbose)  # < 1s par lambda sur mon PC
+    psf = psf_muse(psdm, lbda, verbose=True)
     print('psf_muse done, {:.1f} sec., saving to psf.fits'.format(time() - t0))
     fits.writeto('psf.fits', psf, overwrite=True)
 
-    if visu:
-        plot_psf(lbda, psdm, psf, savefig='psf.pdf')
-        plt.show()
+    plot_psf(lbda, psf)
+    plt.show()
