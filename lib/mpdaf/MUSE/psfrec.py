@@ -851,7 +851,8 @@ def fit_psf_cube(lbda, psfcube):
 
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
-                            lmin=490, lmax=930, nl=35, verbose=False):
+                            seeing_correction=0.2, lmin=490, lmax=930, nl=35,
+                            verbose=False):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -862,6 +863,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         Name of the SPARTA extension (defaults to SPARTA_ATM_DATA).
     npsflin : int
         Number of points where the PSF is reconstructed (on each axis).
+    seeing_correction : float
+        Seeing correction applied to the value from SPARTA.
     lmin, lmax : float
         Wavelength range (nm).
     nl : int
@@ -872,7 +875,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
     """
     with fits.open(filename) as hdul:
         tbl = Table.read(hdul[extname])
-        out = fits.HDUList(hdul[extname])
+        out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
 
     nr = len(tbl)
     h = [500, 15000]
@@ -885,10 +888,11 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
                             for col in ('SEEING', 'TUR_GND', 'L0')]
                            for k in range(1, 5)])
         seeing, GL, L0 = values.mean(axis=0)
-        print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
-              .format(i, nr, seeing, GL, L0))
+        print('{}/{} : seeing={:.2f}(+{:.1f}) GL={:.2f} L0={:.2f}'
+              .format(i, nr, seeing, seeing_correction, GL, L0))
 
         Cn2 = [GL, 1 - GL]
+        seeing += seeing_correction
         psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
                             npsflin=npsflin, dim=1280)
         if npsflin > 1:
@@ -897,7 +901,10 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         psftot.append(psf)
         # fit all planes with a Moffat and store fit parameters
         res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
-        # out.append(fits.ImageHDU(data=psf, name='PSF%d' % i))
+        res.meta['SEEING'] = seeing - seeing_correction
+        res.meta['OFFSET'] = seeing_correction
+        res.meta['GL'] = GL
+        res.meta['L0'] = L0
         out.append(fits.BinTableHDU(data=res, name='FIT%d' % i))
 
     # compute the mean PSF and store PSF and fit parameters
