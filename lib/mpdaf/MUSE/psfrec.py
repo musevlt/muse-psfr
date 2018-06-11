@@ -838,45 +838,75 @@ def plot_psf(lbda, psf):
     ax4.set_title(r'$\beta(\lambda)$')
 
 
-def compute_psf_from_sparta(filename, hdu='SPARTA_ATM_DATA', npsflin=3,
-                            verbose=False):
-    tbl = Table.read(filename, hdu=hdu)
-    nr = len(tbl)
+def fit_psf_cube(lbda, psfcube):
+    res = [im.moffat_fit(unit_center=None, unit_fwhm=None,
+                         circular=True, fit_back=False, verbose=False)
+           for im in psfcube]
+    res = Table(rows=[r.__dict__ for r in res])
+    res.remove_columns(('ima', 'rot', 'cont', 'err_rot', 'err_cont'))
+    res['fwhm'] *= 0.2
+    res['err_fwhm'] *= 0.2
+    res.add_column(Column(name='lbda', data=lbda), index=0)
+    return res
 
-    lambdamin = 490
-    lambdamax = 930
-    nl = 35
-    lbda = np.linspace(lambdamin, lambdamax, nl)
-    hdul = fits.HDUList()
+
+def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
+                            lmin=490, lmax=930, nl=35, verbose=False):
+    """Reconstruct a PSF from SPARTA data.
+
+    Parameters
+    ----------
+    filename : str
+        FITS file containing a SPARTA table.
+    extname : str
+        Name of the SPARTA extension (defaults to SPARTA_ATM_DATA).
+    npsflin : int
+        Number of points where the PSF is reconstructed (on each axis).
+    lmin, lmax : float
+        Wavelength range (nm).
+    nl : int
+        Number of wavelength planes to reconstruct.
+    verbose : bool
+        Verbose output.
+
+    """
+    with fits.open(filename) as hdul:
+        tbl = Table.read(hdul[extname])
+        out = fits.HDUList(hdul[extname])
+
+    nr = len(tbl)
+    h = [500, 15000]
+    lbda = np.linspace(lmin, lmax, nl)
+    psftot = []
 
     for i, row in enumerate(tbl, start=1):
+        # use the mean value for the 4 LGS for the seeing, GL, and L0
         values = np.array([[row['LGS%d_%s' % (k, col)]
-                            for col in ('SEEING', 'R0', 'L0')]
+                            for col in ('SEEING', 'TUR_GND', 'L0')]
                            for k in range(1, 5)])
-        seeing, R0, L0 = values.mean(axis=0)
-        print('{}/{} : seeing={:.2f} L0={:.2f}'.format(i, nr, seeing, L0))
+        seeing, GL, L0 = values.mean(axis=0)
+        print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
+              .format(i, nr, seeing, GL, L0))
 
-        Cn2 = [0.7, 0.3]
-        h = [500, 15000.]
+        Cn2 = [GL, 1 - GL]
         psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
                             npsflin=npsflin, dim=1280)
         if npsflin > 1:
             psd = psd.mean(axis=0)
         psf = psf_muse(psd, lbda, verbose=verbose)
-        hdul.append(fits.ImageHDU(data=psf, name='PSF%d' % i))
-        psf = Cube(data=psf, copy=False)
+        psftot.append(psf)
+        # fit all planes with a Moffat and store fit parameters
+        res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
+        # out.append(fits.ImageHDU(data=psf, name='PSF%d' % i))
+        out.append(fits.BinTableHDU(data=res, name='FIT%d' % i))
 
-        res = [im.moffat_fit(unit_center=None, unit_fwhm=None,
-                             circular=True, fit_back=False, verbose=False)
-               for im in psf]
-        res = Table(rows=[r.__dict__ for r in res])
-        res.remove_columns(('ima', 'rot', 'cont', 'err_rot', 'err_cont'))
-        res['fwhm'] *= 0.2
-        res['err_fwhm'] *= 0.2
-        res.add_column(Column(name='lbda', data=lbda), index=0)
-        hdul.append(fits.BinTableHDU(data=res, name='FIT%d' % i))
+    # compute the mean PSF and store PSF and fit parameters
+    psftot = np.mean(psftot, axis=0)
+    res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
+    out.append(fits.ImageHDU(data=psftot, name='PSF_MEAN'))
+    out.append(fits.BinTableHDU(data=res, name='FIT_MEAN'))
 
-    return hdul
+    return out
 
 
 if __name__ == "__main__":
