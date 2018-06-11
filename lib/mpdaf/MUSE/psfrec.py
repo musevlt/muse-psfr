@@ -18,7 +18,6 @@ from matplotlib.colors import LogNorm
 from mpdaf.obj import Cube
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
-from time import time
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -143,10 +142,10 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
 
 def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
     """Create a grid of points where the PSF is estimated."""
-    x, y = (np.mgrid[:npts, :npts] - npts//2) * field_size / 2
+    x, y = (np.mgrid[:npts, :npts] - npts // 2) * field_size / 2
     dirperf = np.array([x, y]).reshape(2, -1)
 
-    if visu:
+    if visu:  # pragma: no cover
         champvisu = np.max(dirperf)
         plt.scatter(dirperf[0], dirperf[1], marker='o', s=10)
         if lgs is not None:
@@ -649,8 +648,6 @@ def psf_muse(psd, lambdamuse, verbose=False):
     lbda = lambdamuse * 1.e-9
 
     for i in range(nl):
-        if verbose:
-            print('lambda {:.1f}'.format(lambdamuse[i]))
         if ndir != 1:
             psf = np.zeros((ndir, npixc[i], npixc[i]))
             for j in range(ndir):
@@ -801,41 +798,36 @@ def radial_profile(arr, binsize=1):
     https://github.com/keflavich/image_tools/blob/master/image_tools/radialprofile.py
     """
     x, y = np.ogrid[:arr.shape[0], :arr.shape[1]]
-    r = np.hypot(x - int(arr.shape[0]/2 + .5),
-                 y - int(arr.shape[1]/2 + .5))
+    r = np.hypot(x - int(arr.shape[0] / 2 + .5),
+                 y - int(arr.shape[1] / 2 + .5))
     nbins = int(np.round(r.max() / binsize) + 1)
     maxbin = nbins * binsize
-    bins = np.linspace(0, maxbin, nbins+1)
+    bins = np.linspace(0, maxbin, nbins + 1)
     nr = np.histogram(r, bins)[0]
     radial_prof = np.histogram(r, bins, weights=arr)[0]
     bin_centers = (bins[1:] + bins[:-1]) / 2
     return bin_centers, radial_prof / nr
 
 
-def plot_psf(lbda, psf):
+def plot_psf(filename):
+    psf = Cube(filename, ext='PSF_MEAN')
     fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
     ax1, ax2, ax3, ax4 = axes.flat
-    im = ax1.imshow(psf[1], origin='lower', norm=LogNorm())
+    im = ax1.imshow(psf.data[1], origin='lower', norm=LogNorm())
     fig.colorbar(im, ax=ax1)
     ax1.set_title('PSF @500nm')
 
-    center, radial_prof = radial_profile(psf[1])
+    center, radial_prof = radial_profile(psf.data[1])
     ax2.plot(center[1:], radial_prof[1:], lw=1)
     ax2.set_yscale('log')
     ax2.set_title('radial profile')
 
-    psf = Cube(data=psf, copy=False)
-    fwhm, beta = [], []
-    for im in psf:
-        fit = im.moffat_fit(unit_center=None, unit_fwhm=None,
-                            circular=True, fit_back=False, verbose=False)
-        fwhm.append(fit.fwhm[0])
-        beta.append(fit.n)
-
-    ax3.plot(lbda, fwhm)
+    fit = Table.read(filename, hdu='FIT_MEAN')
+    ax3.plot(fit['lbda'], fit['fwhm'][:, 0])
     ax3.set_title(r'$FWHM(\lambda)$')
-    ax4.plot(lbda, beta)
+    ax4.plot(fit['lbda'], fit['n'])
     ax4.set_title(r'$\beta(\lambda)$')
+    return fig
 
 
 def fit_psf_cube(lbda, psfcube):
@@ -895,58 +887,39 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         seeing += seeing_correction
         psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
                             npsflin=npsflin, dim=1280)
+        # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme
+        # chose que la moyenne des PSF ... et ca permet d'aller npsflin^2
+        # fois plus vite
         if npsflin > 1:
             psd = psd.mean(axis=0)
+
+        # Passage PSD --> PSF
         psf = psf_muse(psd, lbda, verbose=verbose)
         psftot.append(psf)
+
         # fit all planes with a Moffat and store fit parameters
         res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
         res.meta['SEEING'] = seeing - seeing_correction
         res.meta['OFFSET'] = seeing_correction
         res.meta['GL'] = GL
         res.meta['L0'] = L0
-        out.append(fits.BinTableHDU(data=res, name='FIT%d' % i))
+        hdu = fits.table_to_hdu(res)
+        hdu.name = 'FIT%d' % i
+        out.append(hdu)
 
     # compute the mean PSF and store PSF and fit parameters
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
+    hdu = fits.table_to_hdu(res)
+    hdu.name = 'FIT_MEAN'
+    out.append(hdu)
     out.append(fits.ImageHDU(data=psftot, name='PSF_MEAN'))
-    out.append(fits.BinTableHDU(data=res, name='FIT_MEAN'))
 
     return out
 
 
 if __name__ == "__main__":
-
-    seeing = 1.
-    L0 = 25.
-    Cn2 = [0.7, 0.3]
-    h = [500, 15000.]
-    zenith = 0.
-    npsflin = 3
-    dim = 1280
-
-    t0 = time()
-    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=zenith, visu=False,
-                        verbose=True, npsflin=npsflin, dim=dim)
-    print('simul_psd_wfm done, {:.1f} sec., saving to psd_mean.fits'
-          .format(time() - t0))
-
-    # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme chose
-    # que la moyenne des PSF ... et ca permet d'aller npsflin^2 fois plus vite
-    psdm = np.mean(psd, axis=0)
-    fits.writeto('psd_mean.fits', psdm, overwrite=True)
-
-    # Passage PSD --> PSF
-    lambdamin = 490
-    lambdamax = 930
-    nl = 35
-    lbda = np.linspace(lambdamin, lambdamax, nl)
-
-    t0 = time()
-    psf = psf_muse(psdm, lbda, verbose=True)
-    print('psf_muse done, {:.1f} sec., saving to psf.fits'.format(time() - t0))
-    fits.writeto('psf.fits', psf, overwrite=True)
-
-    plot_psf(lbda, psf)
+    from mpdaf.MUSE.tests.test_psfrec import test_reconstruction
+    test_reconstruction('.')
+    fig = plot_psf('fitres.fits')
     plt.show()
