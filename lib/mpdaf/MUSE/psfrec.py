@@ -874,6 +874,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
     nr = len(tbl)
     lbda = np.linspace(lmin, lmax, nl)
     psftot = []
+    stats = []
+    print('Processing SPARTA table with {} values...'.format(len(tbl)))
 
     for i, row in enumerate(tbl, start=1):
         # use the mean value for the 4 LGS for the seeing, GL, and L0
@@ -881,13 +883,13 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
                             for col in ('SEEING', 'TUR_GND', 'L0')]
                            for k in range(1, 5)])
         seeing, GL, L0 = values.mean(axis=0)
+        stats.append((seeing, GL, L0))
         print('{}/{} : seeing={:.2f}(+{:.1f}) GL={:.2f} L0={:.2f}'
               .format(i, nr, seeing, seeing_correction, GL, L0))
 
         Cn2 = [GL, 1 - GL]
-        seeing += seeing_correction
-        psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
-                            npsflin=npsflin, dim=1280)
+        psd = simul_psd_wfm(Cn2, h, seeing + seeing_correction, L0, zenith=0.,
+                            verbose=verbose, npsflin=npsflin, dim=1280)
         # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme
         # chose que la moyenne des PSF ... et ca permet d'aller npsflin^2
         # fois plus vite
@@ -900,7 +902,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
 
         # fit all planes with a Moffat and store fit parameters
         res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
-        res.meta['SEEING'] = seeing - seeing_correction
+        res.meta['SEEING'] = seeing
         res.meta['OFFSET'] = seeing_correction
         res.meta['GL'] = GL
         res.meta['L0'] = L0
@@ -911,6 +913,13 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
     # compute the mean PSF and store PSF and fit parameters
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
+    # and store the mean seeing, gl and L0
+    seeing, GL, L0 = np.mean(stats, axis=0)
+    res.meta['SEEING'] = seeing
+    res.meta['OFFSET'] = seeing_correction
+    res.meta['GL'] = GL
+    res.meta['L0'] = L0
+
     hdu = fits.table_to_hdu(res)
     hdu.name = 'FIT_MEAN'
     out.append(hdu)
