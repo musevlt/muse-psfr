@@ -844,7 +844,7 @@ def fit_psf_cube(lbda, psfcube):
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
                             seeing_correction=0.2, lmin=490, lmax=930, nl=35,
-                            verbose=False):
+                            h=(500, 15000), verbose=False):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -861,6 +861,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         Wavelength range (nm).
     nl : int
         Number of wavelength planes to reconstruct.
+    h : tuple of float
+        Altitude of the ground and high layers (m).
     verbose : bool
         Verbose output.
 
@@ -870,7 +872,6 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
 
     nr = len(tbl)
-    h = [500, 15000]
     lbda = np.linspace(lmin, lmax, nl)
     psftot = []
 
