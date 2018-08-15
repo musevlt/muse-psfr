@@ -9,6 +9,7 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 """
 
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
@@ -18,6 +19,7 @@ from matplotlib.colors import LogNorm
 from mpdaf.obj import Cube
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
+from mpdaf.log import clear_loggers
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -867,6 +869,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         Verbose output.
 
     """
+    clear_loggers() # This does not work
     with fits.open(filename) as hdul:
         tbl = Table.read(hdul[extname])
         out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
