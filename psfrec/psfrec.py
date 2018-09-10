@@ -9,7 +9,6 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 """
 
-import matplotlib.pyplot as plt
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, Column
@@ -146,6 +145,7 @@ def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
     dirperf = np.array([x, y]).reshape(2, -1)
 
     if visu:  # pragma: no cover
+        import matplotlib.pyplot as plt
         champvisu = np.max(dirperf)
         plt.scatter(dirperf[0], dirperf[1], marker='o', s=10)
         if lgs is not None:
@@ -810,6 +810,7 @@ def radial_profile(arr, binsize=1):
 
 
 def plot_psf(filename):
+    import matplotlib.pyplot as plt
     psf = Cube(filename, ext='PSF_MEAN')
     fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
     ax1, ax2, ax3, ax4 = axes.flat
@@ -927,9 +928,3 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
 
     return out
 
-
-if __name__ == "__main__":
-    from psfrec.test_psfrec import test_reconstruction
-    test_reconstruction('.')
-    fig = plot_psf('fitres.fits')
-    plt.show()

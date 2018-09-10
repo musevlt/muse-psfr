@@ -5,6 +5,7 @@
 ._*
 .DS_Store
 .ipynb_checkpoints/
+.pytest_cache/
 _githash.py
 api/
 build/

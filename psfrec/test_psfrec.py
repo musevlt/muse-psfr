@@ -3,7 +3,7 @@ import os
 from astropy.io import fits
 from astropy.table import Table
 
-from psfrec import compute_psf_from_sparta
+from psfrec import compute_psf_from_sparta, plot_psf
 
 
 def test_reconstruction(tmpdir):
@@ -32,3 +32,10 @@ def test_reconstruction(tmpdir):
     assert np.allclose(fit['center'], 20)
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
     assert np.allclose(fit[1]['fwhm'], 0.651, atol=1e-2)
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    test_reconstruction('.')
+    fig = plot_psf('fitres.fits')
+    plt.show()
