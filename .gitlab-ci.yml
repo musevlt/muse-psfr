@@ -1,0 +1,10 @@
+before_script:
+  - export PYENV_ROOT="$HOME/.pyenv"
+  - export PATH="$PYENV_ROOT/bin:$PATH"
+  - eval "$(pyenv init -)"
+  - pyenv local 3.6.4
+  - pip install pytest pytest-cov
+  - pwd
+docs:
+  script:
+    - pytest -sv --cov psfrec --cov-report term psfrec/

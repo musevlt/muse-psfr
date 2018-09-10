@@ -3,6 +3,7 @@
 *.egg-info/
 *~
 ._*
+.coverage
 .DS_Store
 .ipynb_checkpoints/
 .pytest_cache/
@@ -10,3 +11,4 @@ _githash.py
 api/
 build/
 docs/_build
+htmlcov/
