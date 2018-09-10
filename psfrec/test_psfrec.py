@@ -4,9 +4,10 @@ from astropy.io import fits
 from astropy.table import Table
 
 from psfrec import compute_psf_from_sparta, plot_psf
+from psfrec.__main__ import main
 
 
-def test_reconstruction(tmpdir):
+def create_test_table(testfile):
     # Create a fake SPARTA table with values for the 4 LGS
     seeing = 1.
     L0 = 25.
@@ -16,8 +17,12 @@ def test_reconstruction(tmpdir):
     tbl = Table([dict(tbl)])
     hdu = fits.table_to_hdu(Table([dict(tbl)]))
     hdu.name = 'SPARTA_ATM_DATA'
-    testfile = os.path.join(str(tmpdir), 'sparta.fits')
     hdu.writeto(testfile, overwrite=True)
+
+
+def test_reconstruction(tmpdir):
+    testfile = os.path.join(str(tmpdir), 'sparta.fits')
+    create_test_table(testfile)
 
     res = compute_psf_from_sparta(testfile, npsflin=3, seeing_correction=0.,
                                   lmin=490, lmax=930, nl=35, verbose=True)
@@ -32,6 +37,26 @@ def test_reconstruction(tmpdir):
     assert np.allclose(fit['center'], 20)
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
     assert np.allclose(fit[1]['fwhm'], 0.651, atol=1e-2)
+
+
+def test_script(tmpdir):
+    testfile = os.path.join(str(tmpdir), 'sparta.fits')
+    create_test_table(testfile)
+
+    logfile = os.path.join(str(tmpdir), 'psfrec.log')
+    main([testfile, '--logfile', logfile])
+
+    with open(logfile) as f:
+        lines = f.read().splitlines()
+
+    assert lines == [
+        'OB None None Airmass 0.00-0.00',
+        '--------------------------------------------------------------------',
+        'LBDA 5000 7000 9000',
+        'FWHM 0.87 0.75 0.65',
+        'BETA 2.52 2.37 2.24',
+        '--------------------------------------------------------------------'
+    ]
 
 
 if __name__ == "__main__":

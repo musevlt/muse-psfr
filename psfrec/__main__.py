@@ -1,4 +1,5 @@
 import argparse
+import io
 import numpy as np
 from astropy.io import fits
 from mpdaf.obj import moffat_image
@@ -15,7 +16,7 @@ def conv_moffat(fwhm, beta, samp=0.28):
     return fit.fwhm[0] * 0.2, fit.n
 
 
-def psfrec(rawname):
+def reconstruct_psf(rawname):
     print('Computing PSF Reconstruction from Sparta data')
     res = compute_psf_from_sparta(rawname)
     conv_fwhm = []
@@ -30,49 +31,44 @@ def psfrec(rawname):
     return data['lbda'], conv_fwhm, conv_beta_corr
 
 
-def main():
+def main(args=None):
     parser = argparse.ArgumentParser(
         description='PSF Reconstruction version beta-1')
-    parser.add_argument('-r', '--raw', default=False,
-                        help='Observation Raw file name')
+    parser.add_argument('raw', help='Observation Raw file name')
     parser.add_argument('--logfile', default='psfrec.log',
                         help='Name of log file')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args)
 
     print('PSFRec version beta-1')
 
-    rawname = args.raw
-    raw = fits.open(rawname)
-    hdr = raw[0].header
-    print('OB %s %s Airmass %.2f-%.2f' % (
-        hdr['HIERARCH ESO OBS NAME'], hdr['DATE'],
-        hdr['HIERARCH ESO TEL AIRM START'], hdr['HIERARCH ESO TEL AIRM END']))
-    lbda, fwhm, beta = psfrec(rawname)
-    lbref = [500, 700, 900]
+    hdr = fits.getheader(args.raw)
+    header_line = ('OB %s %s Airmass %.2f-%.2f' % (
+        hdr.get('HIERARCH ESO OBS NAME'),
+        hdr.get('DATE'),
+        hdr.get('HIERARCH ESO TEL AIRM START', 0),
+        hdr.get('HIERARCH ESO TEL AIRM END', 0)
+    ))
+    print(header_line)
+
+    lbda, fwhm, beta = reconstruct_psf(args.raw)
+    lbref = np.array([500, 700, 900])
     fwhmref = np.interp(lbref, lbda, fwhm)
     betaref = np.interp(lbref, lbda, beta)
-    print(' ')
-    print('OB %s %s Airmass %.2f-%.2f' % (
-        hdr['HIERARCH ESO OBS NAME'], hdr['DATE'],
-        hdr['HIERARCH ESO TEL AIRM START'], hdr['HIERARCH ESO TEL AIRM END']))
-    print('----------------------------------------------------------------------')
-    print('LBDA %.0f %.0f %.0f' % (lbref[0] * 10, lbref[1] * 10, lbref[2] * 10))
-    print('FWHM %.2f %.2f %.2f' % (fwhmref[0], fwhmref[1], fwhmref[2]))
-    print('BETA %.2f %.2f %.2f' % (betaref[0], betaref[1], betaref[2]))
-    print('---------------------------------------------------------------------- ')
+
+    f = io.StringIO()
+    f.write(header_line + '\n')
+    f.write('-' * 68 + '\n')
+    f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbref * 10))
+    f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhmref))
+    f.write('BETA %.2f %.2f %.2f\n' % tuple(betaref))
+    f.write('-' * 68 + '\n')
+
+    f.seek(0)
+    print('\n' + f.read())
 
     if args.logfile is not None:
-        with open(args.logfile, 'a') as f:
-            f.write(' \n')
-            f.write('OB %s %s Airmass %.2f-%.2f\n' % (
-                hdr['HIERARCH ESO OBS NAME'], hdr['DATE'],
-                hdr['HIERARCH ESO TEL AIRM START'],
-                hdr['HIERARCH ESO TEL AIRM END']))
-            f.write('----------------------------------------------------------------------\n')
-            f.write('LBDA %.0f %.0f %.0f\n' % (lbref[0] * 10, lbref[1] * 10, lbref[2] * 10))
-            f.write('FWHM %.2f %.2f %.2f\n' % (fwhmref[0], fwhmref[1], fwhmref[2]))
-            f.write('BETA %.2f %.2f %.2f\n' % (betaref[0], betaref[1], betaref[2]))
-            f.write('----------------------------------------------------------------------\n')
-        print('Results sadded to log file %s' % (args['logfile']))
-    print('End of PSFrec (type return to quit)')
+        f.seek(0)
+        with open(args.logfile, 'a') as fd:
+            fd.write(f.read())
+        print('Results saved to %s' % (args.logfile))

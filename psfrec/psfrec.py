@@ -928,4 +928,3 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
     out.append(fits.ImageHDU(data=psftot, name='PSF_MEAN'))
 
     return out
-
