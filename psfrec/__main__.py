@@ -1,4 +1,4 @@
-from mpdaf.MUSE.psfrec import compute_psf_from_sparta
+from psfrec import compute_psf_from_sparta
 from mpdaf.obj import moffat_image
 import numpy as np
 from astropy.io import fits
@@ -63,4 +63,3 @@ if args['logfile'] is not None:
         f.write('----------------------------------------------------------------------\n')
     print('Results sadded to log file %s'%(args['logfile']))
 print('End of PSFrec (type return to quit)')
-

@@ -3,7 +3,7 @@ import os
 from astropy.io import fits
 from astropy.table import Table
 
-from mpdaf.MUSE.psfrec import compute_psf_from_sparta
+from psfrec import compute_psf_from_sparta
 
 
 def test_reconstruction(tmpdir):
