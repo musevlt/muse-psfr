@@ -322,12 +322,13 @@ def calc_mat_rec_glao_finale(f, arg_f, pitchs_wfs, pitchs_dm, poslgs,
             # inversion of each sub matrix
             if tmp.sum() != 0:
                 if nb_h_recons > 1:
+                    raise NotImplementedError
                     # FIXME: not ported yet! numpy.linalg.pinv ?
                     # condmax : Max acceptable conditionning in inversion for
                     # POPT computation
                     # condmax = 1e6
-                    la_tsvd(mat=tmp, inverse=tmp_inv, condmax=seuil,
-                            silent=True)
+                    # la_tsvd(mat=tmp, inverse=tmp_inv, condmax=seuil,
+                    #         silent=True)
                 else:
                     tmp_inv = np.linalg.inv(tmp)
 
