@@ -5,6 +5,7 @@ before_script:
   - pyenv local 3.6.4
   - pip install tox
   - pwd
-docs:
+
+py36:
   script:
     - tox -v -e py36
