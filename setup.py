@@ -16,7 +16,7 @@ setup(
     install_requires=['mpdaf', 'astropy', 'scipy', 'matplotlib', 'numpy'],
     entry_points={
         'console_scripts': [
-            'psfrec=psfrec.__main__:main',
+            'psfrec=psfrec.run_psfrec:main',
         ]
     },
 )
