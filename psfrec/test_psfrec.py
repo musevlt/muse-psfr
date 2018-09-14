@@ -4,7 +4,7 @@ from astropy.io import fits
 from astropy.table import Table
 
 from psfrec import compute_psf_from_sparta, plot_psf
-from psfrec.__main__ import main
+from psfrec.run_psfrec import main
 
 
 def create_test_table(testfile):
