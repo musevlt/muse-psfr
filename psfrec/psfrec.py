@@ -20,7 +20,7 @@ from scipy.interpolate import interpn
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
-                  npsflin=1, dim=1280):
+                  npsflin=1, dim=1280, only_three_lgs=False):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
 
     Parameters
@@ -68,7 +68,13 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
 
     seplgs = 63.       # separation (en rayon) des LGS [arcsec]
     bruitLGS2 = 1.0    # radians de phase bord a bord de sspup @ lambdalgs
-    poslgs = np.array([[1, 1], [-1, -1], [-1, 1], [1, -1]], dtype=float).T
+
+    if only_three_lgs:
+        print('Using three lasers mode')
+        poslgs = np.array([[1, 1], [-1, -1], [-1, 1]], dtype=float).T
+    else:
+        poslgs = np.array([[1, 1], [-1, -1], [-1, 1], [1, -1]], dtype=float).T
+
     poslgs *= seplgs   # *cos(pi/4) # position sur une grille cartesienne
     law = "LSE"        # type de lois : lse ou mmse
     recons_cn2 = 1     # a priori sur Cn2 => ici GLAO
@@ -884,14 +890,23 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         values = np.array([[row['LGS%d_%s' % (k, col)]
                             for col in ('SEEING', 'TUR_GND', 'L0')]
                            for k in range(1, 5)])
-        seeing, GL, L0 = values.mean(axis=0)
+
+        check_non_null_laser = values[:, 1] > 0
+        nb_gs = np.sum(check_non_null_laser)
+        if nb_gs < 4:
+            print('Missing {} lasers'.format(4 - nb_gs))
+        if nb_gs < 3:
+            print('Arretez tout, appelez roland')
+
+        seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
         stats.append((seeing, GL, L0))
         print('{}/{} : seeing={:.2f}(+{:.1f}) GL={:.2f} L0={:.2f}'
               .format(i, nr, seeing, seeing_correction, GL, L0))
 
         Cn2 = [GL, 1 - GL]
         psd = simul_psd_wfm(Cn2, h, seeing + seeing_correction, L0, zenith=0.,
-                            verbose=verbose, npsflin=npsflin, dim=1280)
+                            verbose=verbose, npsflin=npsflin, dim=1280,
+                            only_three_lgs=(nb_gs < 4))
         # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme
         # chose que la moyenne des PSF ... et ca permet d'aller npsflin^2
         # fois plus vite
