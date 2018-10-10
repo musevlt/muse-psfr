@@ -896,7 +896,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         if nb_gs < 4:
             print('Missing {} lasers'.format(4 - nb_gs))
         if nb_gs < 3:
-            print('Arretez tout, appelez roland')
+            print('Major problem with sparta data')
+            continue
 
         seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
         stats.append((seeing, GL, L0))
