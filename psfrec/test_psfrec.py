@@ -24,8 +24,9 @@ def test_reconstruction(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_test_table(testfile)
 
-    res = compute_psf_from_sparta(testfile, npsflin=3, seeing_correction=0.,
-                                  lmin=490, lmax=930, nl=35, verbose=True)
+    # Note: the case when npsflin=1 is tested below with test_script
+    res = compute_psf_from_sparta(testfile, npsflin=3, lmin=490, lmax=930,
+                                  nl=35, verbose=True)
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
     res.writeto(outfile, overwrite=True)
     assert len(res) == 5
@@ -36,7 +37,7 @@ def test_reconstruction(tmpdir):
     fit = Table.read(res['FIT1'])
     assert np.allclose(fit['center'], 20)
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert np.allclose(fit[1]['fwhm'], 0.651, atol=1e-2)
+    assert np.allclose(fit[1]['fwhm'], 0.84, atol=1e-2)
 
 
 def test_script(tmpdir):
@@ -53,8 +54,8 @@ def test_script(tmpdir):
         'OB None None Airmass 0.00-0.00',
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
-        'FWHM 0.87 0.75 0.65',
-        'BETA 2.52 2.37 2.24',
+        'FWHM 0.84 0.75 0.68',
+        'BETA 2.53 2.30 2.13',
         '--------------------------------------------------------------------'
     ]
 
