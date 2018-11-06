@@ -10,13 +10,17 @@ d'onde avec un pixel scale de 0.2 arcsec.
 """
 
 import numpy as np
+import os
+from astropy.convolution import Moffat2DKernel
 from astropy.io import fits
 from astropy.table import Table, Column
+from joblib import Parallel, delayed
 from math import gamma
 from matplotlib.colors import LogNorm
 from mpdaf.obj import Cube
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
+from scipy.signal import fftconvolve
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
@@ -60,8 +64,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
 
     # lambdalgs = 0.589  # en µm
     lambdaref = 0.5    # en µm
-    nact = 40.         # nombre lineaire d'actionneurs
-    nsspup = 40.       # nombre lineaire d'actionneurs
+    nact = 24.         # nombre lineaire d'actionneurs
+    nsspup = nact      # nombre lineaire d'actionneurs
 
     Fsamp = 1000.      # frequence d'échantillonnage [Hz]
     delay = 2.5        # retard en ms (lecture CCD + calcul)
@@ -93,28 +97,22 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # ---------
     r0ref = seeing2r01(seeing, lambdaref, zenith)  # passage seeing --> r0
     hz = h / np.cos(np.deg2rad(zenith))  # altitude dans la direction de visée
-    dilat = (hsodium - hz) / hsodium  # dilatation pour prendre en compte la LGS
-    hz_lgs = hz / dilat
+    dilat = (hsodium - hz) / hsodium  # dilatation pour prendre en compte
+    hz_lgs = hz / dilat               # la LGS
     hz_lgs -= altDM  # on prend en compte la conjugaison negative du DM
 
     # Step 0.6 : Summarize of parameters
     # ---------
     if verbose:
-        print('r0@0.5µm (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
-        print('r0@0.5µm (line of sight) = ', r0ref)
+        print('r0 0.5um (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
+        print('r0 0.5um (line of sight) = ', r0ref)
         print('Seeing   (line of sight) = ', 0.987 * 0.5 / r0ref / 4.85)
-        print('hbarre   (zenith)        = ', np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
-        print('hbarre   (line of sight) = ', np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
-        print('vbarre                   = ', np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
-        # print('theta0   (zenith)        = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, 0) /
-        #       (np.sum(h**(5./3.)*Cn2))**(3./5.)/4.85*1.e6)
-        # print('theta0   (line of sight) = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, zenith) /
-        #       (np.sum(hz**(5./3.)*Cn2))**(3./5.)/4.85*1.e6)
-        # print('t0       (line of sight) = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, zenith) /
-        #       (np.sum(vent**(5./3.)*Cn2))**(3./5.)*1000.)
+        print('hbarre   (zenith)        = ',
+              np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
+        print('hbarre   (line of sight) = ',
+              np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
+        print('vbarre                   = ',
+              np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
 
     # ========================================================================
 
@@ -122,8 +120,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # => important pour les normalisations
     # L = dim / Dimpup * Dpup
 
-    nact1 = 30             # FIXME: not the same as nact/nssspup ?
-    pitch = Dpup / nact1   # pitch: inter-actuator distance [m]
+    pitch = Dpup / nact    # pitch: inter-actuator distance [m]
     fc = 1 / (2 * pitch)   # pItch frequency (1/2a)  [m^{-1}]
 
     # STEP 1 : Simulation des PSF LGS (tilt inclus)
@@ -646,21 +643,22 @@ def psf_muse(psd, lambdamuse, verbose=False):
     pup = pupil_mask(dim / 4, dim / 2, oc=0.14)
 
     dimpsf = 40
-    pixcale = 0.2
+    pixscale = 0.2
     psfall = np.zeros((nl, dimpsf, dimpsf))
 
     FoV = (lambdamuse / (2 * D)) * dim / (4.85 * 1e3)   # = champ total
-    npixc = (np.round(((dimpsf * pixcale * 2 * 8 * 4.85 * 1000) /
+    npixc = (np.round(((dimpsf * pixscale * 2 * 8 * 4.85 * 1000) /
                        lambdamuse) / 2) * 2).astype(int)
     lbda = lambdamuse * 1.e-9
 
     for i in range(nl):
-        if ndir != 1:
+        if psd.ndim == 3:
             psf = np.zeros((ndir, npixc[i], npixc[i]))
             for j in range(ndir):
-                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
-                                         FoV=FoV[i], verbose=verbose),
-                              center=psf.shape[0] // 2, size=npixc[i] // 2)
+                psf_tmp = psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
+                                     FoV=FoV[i], verbose=verbose)
+                psf[j] = crop(psf_tmp, center=psf_tmp.shape[1] // 2,
+                              size=npixc[i] // 2)
             psf = psf.mean(axis=0)
         else:
             psf = psd_to_psf(psd, pup, D, lbda[i], samp=samp, FoV=FoV[i],
@@ -850,9 +848,118 @@ def fit_psf_cube(lbda, psfcube):
     return res
 
 
-def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
-                            seeing_correction=0.2, lmin=490, lmax=930, nl=35,
-                            h=(500, 15000), verbose=False):
+def convolve_final_psf(seeing, GL, L0, psf):
+
+    # 1. Convolve with Tip-tilt, beta=1.5
+    # -----------------------------------
+    beta_tt = 1.5
+
+    seeingHL = seeing * (1 - GL) ** (3. / 5.)
+
+    r0HL = 0.976 * 0.5 / seeingHL / 4.85  # *(lambdaall[ll]/(5.*1.e-7))**(6/5.)
+
+    # aiL0 = reform(correl_osos_num(0., CN2 =  1,PROFIL_H =1 , DIAM = 8,
+    # DR0 = 1, NUM_ZERN1 =  2,NUM_ZERN2 = 2,HSOURCE = 1000000000000000000.,
+    # GD_ECHELLE = L01[k]>10.))
+    # aikolmo = reform(correl_osos_num(0., CN2 =  1,PROFIL_H = 1, DIAM = 8,
+    # DR0 = 1, NUM_ZERN1 =  2,NUM_ZERN2 = 2,HSOURCE = 1000000000000000000.,
+    # GD_ECHELLE =1000000000000000000000000000000000000000.))
+    # coeffHL  = 2*(aiL0/aikolmo)
+
+    # instead of computing the thing above, we use a pre-computed table which
+    # gives directly coeffHL
+    l0_ind, coeff = fits.getdata(os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), 'coeffL0.fits'))
+    coeffHL = np.interp(L0, l0_ind, coeff)
+
+    pixscale = 0.2
+    fwhmTTopt = (np.sqrt(coeffHL * 0.97 * 6.88 *
+                         (.5 * 1.e-6 / (2. * np.pi))**2 *
+                         8**(-1 / 3.) * r0HL**(-5 / 3.)) /
+                 (4.85 * 1.e-6) * 2.35 / pixscale)
+
+    alpha_tt = fwhmTTopt / (2 * np.sqrt(2**(1. / beta_tt) - 1))
+
+    # Mamp = 1  # amplitude
+    # interneGTTopt = moffat(Npix, Npix, [0, Mamp, alpha_tt, alpha_tt,
+    #                                     Npix / 2, Npix / 2, 0, beta_tt])
+
+    nx, ny = psf.shape[1:]
+    if nx % 2 == 0:
+        nx += 1
+    if ny % 2 == 0:
+        ny += 1
+    kernel = Moffat2DKernel(alpha_tt, beta_tt, x_size=nx, y_size=ny)
+    psf = fftconvolve(psf, kernel.array[np.newaxis, :, :], mode='same')
+
+    # 2. Convolve with MUSE PSF, Moffat beta=2.5, fwhm=0.32
+    # (TODO: should vary with wavelength)
+    # -----------------------------------
+
+    fwhm = 0.32 / pixscale
+    beta_muse = 2.5
+    alpha_muse = fwhm / (2 * np.sqrt(2**(1. / beta_muse) - 1))
+    kernel = Moffat2DKernel(alpha_muse, beta_muse, x_size=nx, y_size=ny)
+    psf = fftconvolve(psf, kernel.array[np.newaxis, :, :], mode='same')
+
+    return psf
+
+
+def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
+    # use the mean value for the 4 LGS for the seeing, GL, and L0
+    values = np.array([[row['LGS%d_%s' % (k, col)]
+                        for col in ('SEEING', 'TUR_GND', 'L0')]
+                       for k in range(1, 5)])
+
+    # check if there are some bad values, apparently the 4th value is
+    # often crap. Check if  GL > 0 and L0 < 100
+    check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
+                            (values[:, 2] < 100))  # L0 < 100
+    nb_gs = np.sum(check_non_null_laser)
+    irow = row.index + 1
+    nrows = len(row.table)
+
+    if nb_gs < 4:
+        print('{}/{} : Missing {} lasers'.format(irow, nrows, 4 - nb_gs))
+    if nb_gs < 3:
+        print('{}/{} : Major problem with sparta data'.format(irow, nrows))
+        return
+
+    seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
+    print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
+          .format(irow, nrows, seeing, GL, L0))
+
+    Cn2 = [GL, 1 - GL]
+    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
+                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4))
+
+    # et voila la/les PSD.
+    # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
+    # la meme chose que la moyenne des PSF ... et ca permet d'aller
+    # npsflin^2 fois plus vite:
+    # psd = psd.mean(axis=0)
+
+    if npsflin == 1:
+        psd = psd[0]
+
+    # Passage PSD --> PSF
+    lbda = np.linspace(lmin, lmax, nl)
+    psf = psf_muse(psd, lbda, verbose=verbose)
+
+    # Convolve with MUSE PSF and Tip-tilt
+    psf = convolve_final_psf(seeing, GL, L0, psf)
+
+    # fit all planes with a Moffat and store fit parameters
+    res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
+    res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
+    hdu = fits.table_to_hdu(res)
+    hdu.name = 'FIT%d' % irow
+    return hdu, psf
+
+
+def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
+                            lmin=490, lmax=930, nl=35, h=(100, 15000),
+                            verbose=False, n_jobs=-1):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -863,8 +970,6 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         Name of the SPARTA extension (defaults to SPARTA_ATM_DATA).
     npsflin : int
         Number of points where the PSF is reconstructed (on each axis).
-    seeing_correction : float
-        Seeing correction applied to the value from SPARTA.
     lmin, lmax : float
         Wavelength range (nm).
     nl : int
@@ -879,64 +984,25 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=3,
         tbl = Table.read(hdul[extname])
         out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
 
-    nr = len(tbl)
-    lbda = np.linspace(lmin, lmax, nl)
-    psftot = []
-    stats = []
-    print('Processing SPARTA table with {} values...'.format(len(tbl)))
-
-    for i, row in enumerate(tbl, start=1):
-        # use the mean value for the 4 LGS for the seeing, GL, and L0
-        values = np.array([[row['LGS%d_%s' % (k, col)]
-                            for col in ('SEEING', 'TUR_GND', 'L0')]
-                           for k in range(1, 5)])
-
-        check_non_null_laser = values[:, 1] > 0
-        nb_gs = np.sum(check_non_null_laser)
-        if nb_gs < 4:
-            print('Missing {} lasers'.format(4 - nb_gs))
-        if nb_gs < 3:
-            print('Major problem with sparta data')
-            continue
-
-        seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
-        stats.append((seeing, GL, L0))
-        print('{}/{} : seeing={:.2f}(+{:.1f}) GL={:.2f} L0={:.2f}'
-              .format(i, nr, seeing, seeing_correction, GL, L0))
-
-        Cn2 = [GL, 1 - GL]
-        psd = simul_psd_wfm(Cn2, h, seeing + seeing_correction, L0, zenith=0.,
-                            verbose=verbose, npsflin=npsflin, dim=1280,
-                            only_three_lgs=(nb_gs < 4))
-        # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme
-        # chose que la moyenne des PSF ... et ca permet d'aller npsflin^2
-        # fois plus vite
-        if npsflin > 1:
-            psd = psd.mean(axis=0)
-
-        # Passage PSD --> PSF
-        psf = psf_muse(psd, lbda, verbose=verbose)
-        psftot.append(psf)
-
-        # fit all planes with a Moffat and store fit parameters
-        res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
-        res.meta['SEEING'] = seeing
-        res.meta['OFFSET'] = seeing_correction
-        res.meta['GL'] = GL
-        res.meta['L0'] = L0
-        hdu = fits.table_to_hdu(res)
-        hdu.name = 'FIT%d' % i
-        out.append(hdu)
+    if len(tbl) == 1:
+        n_jobs = 1
+    print('Processing SPARTA table with {} values, njobs={} ...'
+          .format(len(tbl), n_jobs))
+    res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
+        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
+        for row in tbl)
+    hdus, psftot = zip(*res)
+    out += hdus
+    stats = [(hdu.header['SEEING'], hdu.header['GL'], hdu.header['L0'])
+             for hdu in hdus]
 
     # compute the mean PSF and store PSF and fit parameters
+    lbda = np.linspace(lmin, lmax, nl)
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
     # and store the mean seeing, gl and L0
     seeing, GL, L0 = np.mean(stats, axis=0)
-    res.meta['SEEING'] = seeing
-    res.meta['OFFSET'] = seeing_correction
-    res.meta['GL'] = GL
-    res.meta['L0'] = L0
+    res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
 
     hdu = fits.table_to_hdu(res)
     hdu.name = 'FIT_MEAN'

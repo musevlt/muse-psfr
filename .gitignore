@@ -3,7 +3,8 @@
 *.egg-info/
 *~
 ._*
-.coverage
+.cache
+.coverage*
 .DS_Store
 .ipynb_checkpoints/
 .pytest_cache/

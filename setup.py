@@ -13,7 +13,8 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
-    install_requires=['mpdaf', 'astropy', 'scipy', 'matplotlib', 'numpy'],
+    install_requires=['mpdaf', 'astropy', 'scipy', 'matplotlib', 'numpy',
+                      'joblib'],
     entry_points={
         'console_scripts': [
             'psfrec=psfrec.run_psfrec:main',
