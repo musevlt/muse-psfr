@@ -942,9 +942,10 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             for col in ('SEEING', 'TUR_GND', 'L0')]
                            for k in range(1, 5)])
 
-        # TODO: check if there are some bad values, apparently the 4th value is
-        # often crap. Check if L0 > 100
-        check_non_null_laser = values[:, 1] > 0
+        # check if there are some bad values, apparently the 4th value is
+        # often crap. Check if  GL > 0 and L0 < 100
+        check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
+                                (values[:, 2] < 100))  # L0 < 100
         nb_gs = np.sum(check_non_null_laser)
         if nb_gs < 4:
             print('Missing {} lasers'.format(4 - nb_gs))
