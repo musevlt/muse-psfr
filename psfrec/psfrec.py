@@ -96,8 +96,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # ---------
     r0ref = seeing2r01(seeing, lambdaref, zenith)  # passage seeing --> r0
     hz = h / np.cos(np.deg2rad(zenith))  # altitude dans la direction de visée
-    dilat = (hsodium - hz) / hsodium  # dilatation pour prendre en compte la LGS
-    hz_lgs = hz / dilat
+    dilat = (hsodium - hz) / hsodium  # dilatation pour prendre en compte
+    hz_lgs = hz / dilat               # la LGS
     hz_lgs -= altDM  # on prend en compte la conjugaison negative du DM
 
     # Step 0.6 : Summarize of parameters
@@ -106,18 +106,12 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
         print('r0@0.5µm (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
         print('r0@0.5µm (line of sight) = ', r0ref)
         print('Seeing   (line of sight) = ', 0.987 * 0.5 / r0ref / 4.85)
-        print('hbarre   (zenith)        = ', np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
-        print('hbarre   (line of sight) = ', np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
-        print('vbarre                   = ', np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
-        # print('theta0   (zenith)        = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, 0) /
-        #       (np.sum(h**(5./3.)*Cn2))**(3./5.)/4.85*1.e6)
-        # print('theta0   (line of sight) = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, zenith) /
-        #       (np.sum(hz**(5./3.)*Cn2))**(3./5.)/4.85*1.e6)
-        # print('t0       (line of sight) = ',
-        #       0.34 * seeing2r01(seeing, lambdaref, zenith) /
-        #       (np.sum(vent**(5./3.)*Cn2))**(3./5.)*1000.)
+        print('hbarre   (zenith)        = ',
+              np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
+        print('hbarre   (line of sight) = ',
+              np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
+        print('vbarre                   = ',
+              np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
 
     # ========================================================================
 
