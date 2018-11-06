@@ -104,8 +104,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     # Step 0.6 : Summarize of parameters
     # ---------
     if verbose:
-        print('r0 0.5µm (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
-        print('r0 0.5µm (line of sight) = ', r0ref)
+        print('r0 0.5um (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
+        print('r0 0.5um (line of sight) = ', r0ref)
         print('Seeing   (line of sight) = ', 0.987 * 0.5 / r0ref / 4.85)
         print('hbarre   (zenith)        = ',
               np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
