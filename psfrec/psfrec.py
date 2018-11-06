@@ -14,6 +14,7 @@ import os
 from astropy.convolution import Moffat2DKernel
 from astropy.io import fits
 from astropy.table import Table, Column
+from joblib import Parallel, delayed
 from math import gamma
 from matplotlib.colors import LogNorm
 from mpdaf.obj import Cube
@@ -904,9 +905,61 @@ def convolve_final_psf(seeing, GL, L0, psf):
     return psf
 
 
+def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
+    # use the mean value for the 4 LGS for the seeing, GL, and L0
+    values = np.array([[row['LGS%d_%s' % (k, col)]
+                        for col in ('SEEING', 'TUR_GND', 'L0')]
+                       for k in range(1, 5)])
+
+    # check if there are some bad values, apparently the 4th value is
+    # often crap. Check if  GL > 0 and L0 < 100
+    check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
+                            (values[:, 2] < 100))  # L0 < 100
+    nb_gs = np.sum(check_non_null_laser)
+    irow = row.index + 1
+    nrows = len(row.table)
+
+    if nb_gs < 4:
+        print('{}/{} : Missing {} lasers'.format(irow, nrows, 4 - nb_gs))
+    if nb_gs < 3:
+        print('{}/{} : Major problem with sparta data'.format(irow, nrows))
+        return
+
+    seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
+    print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
+          .format(irow, nrows, seeing, GL, L0))
+
+    Cn2 = [GL, 1 - GL]
+    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
+                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4))
+
+    # et voila la/les PSD.
+    # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
+    # la meme chose que la moyenne des PSF ... et ca permet d'aller
+    # npsflin^2 fois plus vite:
+    # psd = psd.mean(axis=0)
+
+    if npsflin == 1:
+        psd = psd[0]
+
+    # Passage PSD --> PSF
+    lbda = np.linspace(lmin, lmax, nl)
+    psf = psf_muse(psd, lbda, verbose=verbose)
+
+    # Convolve with MUSE PSF and Tip-tilt
+    psf = convolve_final_psf(seeing, GL, L0, psf)
+
+    # fit all planes with a Moffat and store fit parameters
+    res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
+    res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
+    hdu = fits.table_to_hdu(res)
+    hdu.name = 'FIT%d' % irow
+    return hdu, psf
+
+
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, h=(100, 15000),
-                            verbose=False):
+                            verbose=False, n_jobs=-1):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -931,73 +984,25 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         tbl = Table.read(hdul[extname])
         out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
 
-    nr = len(tbl)
-    lbda = np.linspace(lmin, lmax, nl)
-    psftot = []
-    stats = []
-    print('Processing SPARTA table with {} values...'.format(len(tbl)))
-
-    for i, row in enumerate(tbl, start=1):
-        # use the mean value for the 4 LGS for the seeing, GL, and L0
-        values = np.array([[row['LGS%d_%s' % (k, col)]
-                            for col in ('SEEING', 'TUR_GND', 'L0')]
-                           for k in range(1, 5)])
-
-        # check if there are some bad values, apparently the 4th value is
-        # often crap. Check if  GL > 0 and L0 < 100
-        check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
-                                (values[:, 2] < 100))  # L0 < 100
-        nb_gs = np.sum(check_non_null_laser)
-        if nb_gs < 4:
-            print('Missing {} lasers'.format(4 - nb_gs))
-        if nb_gs < 3:
-            print('Major problem with sparta data')
-            continue
-
-        seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
-        stats.append((seeing, GL, L0))
-        print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
-              .format(i, nr, seeing, GL, L0))
-
-        Cn2 = [GL, 1 - GL]
-        psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0.,
-                            verbose=verbose, npsflin=npsflin, dim=1280,
-                            only_three_lgs=(nb_gs < 4))
-
-        # et voila la/les PSD.
-        # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
-        # la meme chose que la moyenne des PSF ... et ca permet d'aller
-        # npsflin^2 fois plus vite:
-        # psd = psd.mean(axis=0)
-
-        if npsflin == 1:
-            psd = psd[0]
-
-        # Passage PSD --> PSF
-        psf = psf_muse(psd, lbda, verbose=verbose)
-
-        # Convolve with MUSE PSF and Tip-tilt
-        psf = convolve_final_psf(seeing, GL, L0, psf)
-
-        psftot.append(psf)
-
-        # fit all planes with a Moffat and store fit parameters
-        res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
-        res.meta['SEEING'] = seeing
-        res.meta['GL'] = GL
-        res.meta['L0'] = L0
-        hdu = fits.table_to_hdu(res)
-        hdu.name = 'FIT%d' % i
-        out.append(hdu)
+    if len(tbl) == 1:
+        n_jobs = 1
+    print('Processing SPARTA table with {} values, njobs={} ...'
+          .format(len(tbl), n_jobs))
+    res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
+        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
+        for row in tbl)
+    hdus, psftot = zip(*res)
+    out += hdus
+    stats = [(hdu.header['SEEING'], hdu.header['GL'], hdu.header['L0'])
+             for hdu in hdus]
 
     # compute the mean PSF and store PSF and fit parameters
+    lbda = np.linspace(lmin, lmax, nl)
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
     # and store the mean seeing, gl and L0
     seeing, GL, L0 = np.mean(stats, axis=0)
-    res.meta['SEEING'] = seeing
-    res.meta['GL'] = GL
-    res.meta['L0'] = L0
+    res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
 
     hdu = fits.table_to_hdu(res)
     hdu.name = 'FIT_MEAN'

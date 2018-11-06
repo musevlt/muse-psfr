@@ -52,7 +52,8 @@ def test_bad_l0(tmpdir, capsys):
     res = compute_psf_from_sparta(testfile, verbose=True)
 
     captured = capsys.readouterr()
-    assert 'Missing 1 lasers' in captured.out.splitlines()
+    assert '1/1 : Missing 1 lasers' in captured.out.splitlines()
+    assert 'Using three lasers mode' in captured.out.splitlines()
 
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
     res.writeto(outfile, overwrite=True)
