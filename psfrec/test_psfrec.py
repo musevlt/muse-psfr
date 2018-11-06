@@ -19,7 +19,7 @@ def create_test_table(testfile, nlines=1, bad_l0=False):
     if bad_l0:
         tbl['LGS4_L0'] = 150
 
-    hdu = fits.table_to_hdu(Table([dict(tbl)]))
+    hdu = fits.table_to_hdu(tbl)
     hdu.name = 'SPARTA_ATM_DATA'
     hdu.writeto(testfile, overwrite=True)
 
