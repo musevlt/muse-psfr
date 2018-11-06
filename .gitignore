@@ -3,6 +3,7 @@
 *.egg-info/
 *~
 ._*
+.cache
 .coverage
 .DS_Store
 .ipynb_checkpoints/

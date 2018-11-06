@@ -60,6 +60,21 @@ def test_script(tmpdir):
     ]
 
 
+def test_plot(tmpdir):
+    import matplotlib
+    matplotlib.use('agg', force=True)
+
+    testfile = os.path.join(str(tmpdir), 'sparta.fits')
+    create_test_table(testfile)
+
+    res = compute_psf_from_sparta(testfile, verbose=True)
+    outfile = os.path.join(str(tmpdir), 'fitres.fits')
+    res.writeto(outfile, overwrite=True)
+
+    fig = plot_psf(outfile)
+    fig.savefig(str(tmpdir.join('fig.png')))
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     test_reconstruction('.')
