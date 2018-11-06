@@ -651,12 +651,13 @@ def psf_muse(psd, lambdamuse, verbose=False):
     lbda = lambdamuse * 1.e-9
 
     for i in range(nl):
-        if ndir != 1:
+        if psd.ndim == 3:
             psf = np.zeros((ndir, npixc[i], npixc[i]))
             for j in range(ndir):
-                psf[j] = crop(psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
-                                         FoV=FoV[i], verbose=verbose),
-                              center=psf.shape[0] // 2, size=npixc[i] // 2)
+                psf_tmp = psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
+                                     FoV=FoV[i], verbose=verbose)
+                psf[j] = crop(psf_tmp, center=psf_tmp.shape[1] // 2,
+                              size=npixc[i] // 2)
             psf = psf.mean(axis=0)
         else:
             psf = psd_to_psf(psd, pup, D, lbda[i], samp=samp, FoV=FoV[i],
@@ -962,12 +963,14 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0.,
                             verbose=verbose, npsflin=npsflin, dim=1280,
                             only_three_lgs=(nb_gs < 4))
-        # et voila la/les PSD. on moyenne les PSD .. c'est presque la meme
-        # chose que la moyenne des PSF ... et ca permet d'aller npsflin^2
-        # fois plus vite
-        if npsflin > 1:
-            psd = psd.mean(axis=0)
-        else:
+
+        # et voila la/les PSD.
+        # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
+        # la meme chose que la moyenne des PSF ... et ca permet d'aller
+        # npsflin^2 fois plus vite:
+        # psd = psd.mean(axis=0)
+
+        if npsflin == 1:
             psd = psd[0]
 
         # Passage PSD --> PSF
