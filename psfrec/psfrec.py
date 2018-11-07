@@ -920,10 +920,8 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     nrows = len(row.table)
 
     if nb_gs < 4:
-        print('{}/{} : Missing {} lasers'.format(irow, nrows, 4 - nb_gs))
-    if nb_gs < 3:
-        print('{}/{} : Major problem with sparta data'.format(irow, nrows))
-        return
+        print('{}/{} : Using only {} values out of 4 after outliers rejection'
+              .format(irow, nrows, 4 - nb_gs))
 
     seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
