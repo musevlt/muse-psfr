@@ -7,12 +7,10 @@ from psfrec import compute_psf_from_sparta, plot_psf
 from psfrec.run_psfrec import main
 
 
-def create_test_table(testfile, nlines=1, bad_l0=False):
+def create_test_table(testfile, nlines=1, seeing=1, L0=25, GL=0.7,
+                      bad_l0=False):
     # Create a fake SPARTA table with values for the 4 LGS
-    seeing = 1.
-    L0 = 25.
-    Cn2 = [0.7, 0.3]
-
+    Cn2 = [GL, 1 - GL]
     tbl = [('LGS%d_%s' % (k, col), v) for k in range(1, 5)
            for col, v in (('SEEING', seeing), ('TUR_GND', Cn2[0]), ('L0', L0))]
     tbl = Table([dict(tbl)] * nlines)
@@ -79,7 +77,7 @@ def test_script(tmpdir):
     with open(logfile) as f:
         lines = f.read().splitlines()
 
-    assert lines == [
+    assert lines[2:] == [
         'OB None None Airmass 0.00-0.00',
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',

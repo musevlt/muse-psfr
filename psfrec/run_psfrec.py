@@ -39,17 +39,14 @@ def main(args=None):
     print(header_line)
 
     lbda, fwhm, beta = reconstruct_psf(args.raw, verbose=args.verbose,
-                                       n_jobs=args.njobs)
-    lbref = np.array([500, 700, 900])
-    fwhmref = np.interp(lbref, lbda, fwhm)
-    betaref = np.interp(lbref, lbda, beta)
-
+                                       n_jobs=args.njobs, lmin=500, lmax=900,
+                                       nl=3)
     f = io.StringIO()
     f.write(header_line + '\n')
     f.write('-' * 68 + '\n')
-    f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbref * 10))
-    f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhmref))
-    f.write('BETA %.2f %.2f %.2f\n' % tuple(betaref))
+    f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbda * 10))
+    f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhm))
+    f.write('BETA %.2f %.2f %.2f\n' % tuple(beta))
     f.write('-' * 68 + '\n')
 
     f.seek(0)
@@ -58,5 +55,6 @@ def main(args=None):
     if args.logfile is not None:
         f.seek(0)
         with open(args.logfile, 'a') as fd:
+            fd.write('\nFile: {}\n'.format(args.raw))
             fd.write(f.read())
         print('Results saved to %s' % (args.logfile))
