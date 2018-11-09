@@ -3,8 +3,8 @@ import io
 import numpy as np
 from astropy.io import fits
 
-from .psfrec import compute_psf_from_sparta
-from .version import __version__
+from psfrec.psfrec import compute_psf_from_sparta
+from psfrec.version import __version__
 
 
 def reconstruct_psf(rawname, **kwargs):
