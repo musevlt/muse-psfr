@@ -915,13 +915,18 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     # often crap. Check if  GL > 0 and L0 < 100
     check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
                             (values[:, 2] < 100))  # L0 < 100
+
     nb_gs = np.sum(check_non_null_laser)
     irow = row.index + 1
     nrows = len(row.table)
 
-    if nb_gs < 4:
+    if nb_gs == 0:
+        print('{}/{} : No valid values, skipping this row'.format(irow, nrows))
+        print(values)
+        return
+    elif nb_gs < 4:
         print('{}/{} : Using only {} values out of 4 after outliers rejection'
-              .format(irow, nrows, 4 - nb_gs))
+              .format(irow, nrows, nb_gs))
 
     seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
@@ -989,7 +994,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
         delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
         for row in tbl)
-    hdus, psftot = zip(*res)
+    hdus, psftot = zip(*[r for r in res if r is not None])
     out += hdus
     stats = [(hdu.header['SEEING'], hdu.header['GL'], hdu.header['L0'])
              for hdu in hdus]
