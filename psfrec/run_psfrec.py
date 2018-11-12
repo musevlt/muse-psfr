@@ -10,8 +10,11 @@ from psfrec.version import __version__
 def reconstruct_psf(rawname, **kwargs):
     print('Computing PSF Reconstruction from Sparta data')
     res = compute_psf_from_sparta(rawname, **kwargs)
-    data = res['FIT_MEAN'].data
-    return data['lbda'], data['fwhm'][:, 0], data['n']
+    if res:
+        data = res['FIT_MEAN'].data
+        return data['lbda'], data['fwhm'][:, 0], data['n']
+    else:
+        return None
 
 
 def main(args=None):
@@ -54,8 +57,12 @@ def main(args=None):
         ))
         print(header_line)
 
-    lbda, fwhm, beta = reconstruct_psf(rawf, verbose=args.verbose, lmin=500,
-                                       lmax=900, nl=3, n_jobs=args.njobs)
+    res = reconstruct_psf(rawf, verbose=args.verbose, lmin=500,
+                          lmax=900, nl=3, n_jobs=args.njobs)
+    if res is None:
+        sys.exit('No results')
+
+    lbda, fwhm, beta = res
     f = io.StringIO()
     if header_line:
         f.write(header_line + '\n')

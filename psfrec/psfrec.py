@@ -994,7 +994,14 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
         delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
         for row in tbl)
-    hdus, psftot = zip(*[r for r in res if r is not None])
+
+    # filter values that could not be computed
+    res = [r for r in res if r is not None]
+    if len(res) == 0:
+        print('File contain not valid values')
+        return
+
+    hdus, psftot = zip(*res)
     out += hdus
     stats = [(hdu.header['SEEING'], hdu.header['GL'], hdu.header['L0'])
              for hdu in hdus]

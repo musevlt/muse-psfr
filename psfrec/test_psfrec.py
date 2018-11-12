@@ -51,6 +51,17 @@ def test_bad_l0(tmpdir, capsys):
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
     assert np.allclose(fit[1]['fwhm'], 0.84, atol=1e-2)
 
+    # --------
+    # Test no valid values
+    testfile = os.path.join(str(tmpdir), 'sparta.fits')
+    create_sparta_table(outfile=testfile, L0=1000)
+    res = compute_psf_from_sparta(testfile, verbose=True)
+
+    captured = capsys.readouterr()
+    assert ('1/1 : No valid values, skipping this row'
+            in captured.out.splitlines())
+
+
 
 def test_script(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
@@ -76,6 +87,9 @@ def test_script(tmpdir):
 
     with pytest.raises(SystemExit, match='--values must contain a list.*'):
         main(['--values', '0.1,0.2'])
+
+    with pytest.raises(SystemExit, match='No results'):
+        main(['--values', '1,0.7,1000'])
 
     logfile = os.path.join(str(tmpdir), 'psfrec2.log')
     main(['--values', '1,0.7,25', '--logfile', logfile])
