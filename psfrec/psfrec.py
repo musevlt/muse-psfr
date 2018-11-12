@@ -1013,3 +1013,22 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     out.append(fits.ImageHDU(data=psftot, name='PSF_MEAN'))
 
     return out
+
+
+def create_sparta_table(nlines=1, seeing=1, L0=25, GL=0.7, bad_l0=False,
+                        outfile=None):
+    # Create a SPARTA table with values for the 4 LGS
+    Cn2 = [GL, 1 - GL]
+    tbl = [('LGS%d_%s' % (k, col), v) for k in range(1, 5)
+           for col, v in (('SEEING', seeing), ('TUR_GND', Cn2[0]), ('L0', L0))]
+    tbl = Table([dict(tbl)] * nlines)
+    if bad_l0:
+        tbl['LGS4_L0'] = 150
+
+    hdu = fits.table_to_hdu(tbl)
+    hdu.name = 'SPARTA_ATM_DATA'
+
+    if outfile is not None:
+        hdu.writeto(outfile, overwrite=True)
+
+    return hdu

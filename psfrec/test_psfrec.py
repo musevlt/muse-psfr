@@ -1,30 +1,15 @@
 import numpy as np
 import os
-from astropy.io import fits
+import pytest
 from astropy.table import Table
 
-from psfrec import compute_psf_from_sparta, plot_psf
+from psfrec import compute_psf_from_sparta, plot_psf, create_sparta_table
 from psfrec.run_psfrec import main
-
-
-def create_test_table(testfile, nlines=1, seeing=1, L0=25, GL=0.7,
-                      bad_l0=False):
-    # Create a fake SPARTA table with values for the 4 LGS
-    Cn2 = [GL, 1 - GL]
-    tbl = [('LGS%d_%s' % (k, col), v) for k in range(1, 5)
-           for col, v in (('SEEING', seeing), ('TUR_GND', Cn2[0]), ('L0', L0))]
-    tbl = Table([dict(tbl)] * nlines)
-    if bad_l0:
-        tbl['LGS4_L0'] = 150
-
-    hdu = fits.table_to_hdu(tbl)
-    hdu.name = 'SPARTA_ATM_DATA'
-    hdu.writeto(testfile, overwrite=True)
 
 
 def test_reconstruction(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
-    create_test_table(testfile)
+    create_sparta_table(outfile=testfile)
 
     # Note: the case when npsflin=1 is tested below with test_script
     res = compute_psf_from_sparta(testfile, npsflin=3, lmin=490, lmax=930,
@@ -44,13 +29,13 @@ def test_reconstruction(tmpdir):
 
 def test_bad_l0(tmpdir, capsys):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
-    create_test_table(testfile, bad_l0=True)
+    create_sparta_table(outfile=testfile, bad_l0=True)
 
     # Note: the case when npsflin=1 is tested below with test_script
     res = compute_psf_from_sparta(testfile, verbose=True)
 
     captured = capsys.readouterr()
-    assert ('1/1 : Using only 1 values out of 4 after outliers rejection'
+    assert ('1/1 : Using only 3 values out of 4 after outliers rejection'
             in captured.out.splitlines())
     assert 'Using three lasers mode' in captured.out.splitlines()
 
@@ -69,7 +54,7 @@ def test_bad_l0(tmpdir, capsys):
 
 def test_script(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
-    create_test_table(testfile)
+    create_sparta_table(outfile=testfile)
 
     logfile = os.path.join(str(tmpdir), 'psfrec.log')
     main([testfile, '--logfile', logfile])
@@ -86,13 +71,33 @@ def test_script(tmpdir):
         '--------------------------------------------------------------------'
     ]
 
+    with pytest.raises(SystemExit, match='no input file provided'):
+        main([])
+
+    with pytest.raises(SystemExit, match='--values must contain a list.*'):
+        main(['--values', '0.1,0.2'])
+
+    logfile = os.path.join(str(tmpdir), 'psfrec2.log')
+    main(['--values', '1,0.7,25', '--logfile', logfile])
+
+    with open(logfile) as f:
+        lines = f.read().splitlines()
+
+    assert lines[2:] == [
+        '--------------------------------------------------------------------',
+        'LBDA 5000 7000 9000',
+        'FWHM 0.84 0.75 0.68',
+        'BETA 2.53 2.30 2.13',
+        '--------------------------------------------------------------------'
+    ]
+
 
 def test_plot(tmpdir):
     import matplotlib
     matplotlib.use('agg', force=True)
 
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
-    create_test_table(testfile, nlines=2)
+    create_sparta_table(outfile=testfile, nlines=2)
 
     res = compute_psf_from_sparta(testfile, verbose=True)
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
