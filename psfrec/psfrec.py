@@ -848,7 +848,7 @@ def fit_psf_cube(lbda, psfcube):
     return res
 
 
-def convolve_final_psf(seeing, GL, L0, psf):
+def convolve_final_psf(lbda, seeing, GL, L0, psf):
 
     # 1. Convolve with Tip-tilt, beta=1.5
     # -----------------------------------
@@ -892,17 +892,18 @@ def convolve_final_psf(seeing, GL, L0, psf):
     kernel = Moffat2DKernel(alpha_tt, beta_tt, x_size=nx, y_size=ny)
     psf = fftconvolve(psf, kernel.array[np.newaxis, :, :], mode='same')
 
-    # 2. Convolve with MUSE PSF, Moffat beta=2.5, fwhm=0.32
-    # (TODO: should vary with wavelength)
+    # 2. Convolve with MUSE PSF, Use polynomial approximation
     # -----------------------------------
 
-    fwhm = 0.32 / pixscale
-    beta_muse = 2.5
+    fwhm,beta_muse,std_fwhm,std_beta = muse_intrinsic_psf(lbda)
+    fwhm = fwhm / pixscale
     alpha_muse = fwhm / (2 * np.sqrt(2**(1. / beta_muse) - 1))
-    kernel = Moffat2DKernel(alpha_muse, beta_muse, x_size=nx, y_size=ny)
-    psf = fftconvolve(psf, kernel.array[np.newaxis, :, :], mode='same')
+    psf_final = np.zeros_like(psf)
+    for k,(alpha,beta) in enumerate(zip(alpha_muse,beta_muse)):
+        kernel = Moffat2DKernel(alpha, beta, x_size=nx, y_size=ny)
+        psf_final[k,:,:] = fftconvolve(psf[k,:,:], kernel, mode='same')
 
-    return psf
+    return psf_final
 
 
 def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
@@ -950,7 +951,7 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     psf = psf_muse(psd, lbda, verbose=verbose)
 
     # Convolve with MUSE PSF and Tip-tilt
-    psf = convolve_final_psf(seeing, GL, L0, psf)
+    psf = convolve_final_psf(lbda, seeing, GL, L0, psf)
 
     # fit all planes with a Moffat and store fit parameters
     res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
@@ -1039,3 +1040,23 @@ def create_sparta_table(nlines=1, seeing=1, L0=25, GL=0.7, bad_l0=False,
         hdu.writeto(outfile, overwrite=True)
 
     return hdu
+
+
+def muse_intrinsic_psf(lbda):
+    """Compute MUSE PSF polynomial approximation
+
+    Parameters
+    ----------
+    lbda : float or array of float
+        wavelength in A.
+
+    return fwhm (array of float), beta (array or float), fwhm_std (float), beta_std (float)
+    """
+    pol_beta = [10.1797308,-32.35258942,38.18625705,-20.24426742,3.91409389,2.44643245]
+    pol_fwhm = [1.19902075,-3.33403532,3.7216592,-2.05141069,0.39250415,0.33318358]
+    fwhm_std = 0.02
+    beta_std = 0.18
+    lb = (10*lbda-4750)/(9350-4750)
+    fwhm = np.polyval(pol_fwhm, lb)
+    beta = np.polyval(pol_beta, lb)
+    return fwhm,beta,fwhm_std,beta_std
