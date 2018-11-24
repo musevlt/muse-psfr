@@ -21,7 +21,7 @@ def reconstruct_psf(rawname, **kwargs):
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description='PSF Reconstruction version beta-1')
+        description=f'PSF Reconstruction version {__version__}')
     parser.add_argument('raw', help='observation Raw file name', nargs='?')
     parser.add_argument('--values', help='Values of seeing, GL, L0, to use '
                         'instead of the raw file, comma-separated.')
