@@ -1081,16 +1081,20 @@ def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5,5), output=0):
     return a dictionary with fwhm_poly (array), beta_poly (array) if output=0
     and lbda_fit, fwhm_fit, beta_fit if output=1
     """
-    lb = (lbda-475)/(935-475)
+    lb = _norm_lbda(lbda,475,935)
     fwhm_pol = np.polyfit(lb, fwhm, deg[0])
     beta_pol = np.polyfit(lb, beta, deg[1])
     res = dict(fwhm_pol=fwhm_pol, beta_pol=beta_pol, lbda=lbda, lbda_lim=(475,935))
     if output>0:
         lbda_fit = np.linspace(475,935,50)
-        lbf = (lbda_fit-475)/(935-475)
+        lbf = _norm_lbda(lbda_fit,475,935)
         fwhm_fit = np.polyval(fwhm_pol, lbf)
         beta_fit = np.polyval(beta_pol, lbf)
         res['lbda_fit'] = lbda_fit
         res['fwhm_fit'] = fwhm_fit
         res['beta_fit'] = beta_fit
     return res
+
+def _norm_lbda(lbda, lb1, lb2):
+    nlbda = (lbda-lb1)/(lb2-lb1) - 0.5
+    return nlbda
