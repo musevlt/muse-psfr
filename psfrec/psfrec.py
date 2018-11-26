@@ -895,13 +895,13 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     # 2. Convolve with MUSE PSF, Use polynomial approximation
     # -----------------------------------
 
-    fwhm,beta_muse,std_fwhm,std_beta = muse_intrinsic_psf(lbda)
+    fwhm, beta_muse, std_fwhm, std_beta = muse_intrinsic_psf(lbda)
     fwhm = fwhm / pixscale
     alpha_muse = fwhm / (2 * np.sqrt(2**(1. / beta_muse) - 1))
     psf_final = np.zeros_like(psf)
-    for k,(alpha,beta) in enumerate(zip(alpha_muse,beta_muse)):
+    for k, (alpha, beta) in enumerate(zip(alpha_muse, beta_muse)):
         kernel = Moffat2DKernel(alpha, beta, x_size=nx, y_size=ny)
-        psf_final[k,:,:] = fftconvolve(psf[k,:,:], kernel, mode='same')
+        psf_final[k, :, :] = fftconvolve(psf[k, :, :], kernel, mode='same')
 
     return psf_final
 
@@ -1043,26 +1043,34 @@ def create_sparta_table(nlines=1, seeing=1, L0=25, GL=0.7, bad_l0=False,
 
 
 def muse_intrinsic_psf(lbda):
-    """Compute MUSE PSF polynomial approximation
+    """Compute MUSE PSF polynomial approximation.
 
     Parameters
     ----------
     lbda : float or array of float
         wavelength in A.
 
-    return fwhm (array of float), beta (array or float), fwhm_std (float), beta_std (float)
+    Returns
+    -------
+    fwhm : array of float
+    beta : array or float
+    fwhm_std : float
+    beta_std : float
+
     """
-    pol_beta = [10.1797308,-32.35258942,38.18625705,-20.24426742,3.91409389,2.44643245]
-    pol_fwhm = [1.19902075,-3.33403532,3.7216592,-2.05141069,0.39250415,0.33318358]
+    pol_beta = [10.1797308, -32.35258942, 38.18625705, -20.24426742,
+                3.91409389, 2.44643245]
+    pol_fwhm = [1.19902075, -3.33403532, 3.7216592, -2.05141069, 0.39250415,
+                0.33318358]
     fwhm_std = 0.02
     beta_std = 0.18
-    lb = (10*lbda-4750)/(9350-4750)
+    lb = (10 * lbda - 4750) / (9350 - 4750)
     fwhm = np.polyval(pol_fwhm, lb)
     beta = np.polyval(pol_beta, lb)
-    return fwhm,beta,fwhm_std,beta_std
+    return fwhm, beta, fwhm_std, beta_std
 
 
-def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5,5), output=0):
+def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5, 5), output=0):
     """Fit MUSE PSF fwhm and beta with polynoms
 
     Parameters
@@ -1078,16 +1086,21 @@ def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5,5), output=0):
     output: int
          if set to 1, the fitted values are returned
 
-    return a dictionary with fwhm_poly (array), beta_poly (array) if output=0
-    and lbda_fit, fwhm_fit, beta_fit if output=1
+    Returns
+    -------
+    dict
+        dictionary with fwhm_poly (array), beta_poly (array) if output=0
+        and lbda_fit, fwhm_fit, beta_fit if output=1
+
     """
-    lb = _norm_lbda(lbda,475,935)
+    lb = _norm_lbda(lbda, 475, 935)
     fwhm_pol = np.polyfit(lb, fwhm, deg[0])
     beta_pol = np.polyfit(lb, beta, deg[1])
-    res = dict(fwhm_pol=fwhm_pol, beta_pol=beta_pol, lbda=lbda, lbda_lim=(475,935))
-    if output>0:
-        lbda_fit = np.linspace(475,935,50)
-        lbf = _norm_lbda(lbda_fit,475,935)
+    res = dict(fwhm_pol=fwhm_pol, beta_pol=beta_pol, lbda=lbda,
+               lbda_lim=(475, 935))
+    if output > 0:
+        lbda_fit = np.linspace(475, 935, 50)
+        lbf = _norm_lbda(lbda_fit, 475, 935)
         fwhm_fit = np.polyval(fwhm_pol, lbf)
         beta_fit = np.polyval(beta_pol, lbf)
         res['lbda_fit'] = lbda_fit
@@ -1095,6 +1108,7 @@ def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5,5), output=0):
         res['beta_fit'] = beta_fit
     return res
 
+
 def _norm_lbda(lbda, lb1, lb2):
-    nlbda = (lbda-lb1)/(lb2-lb1) - 0.5
+    nlbda = (lbda - lb1) / (lb2 - lb1) - 0.5
     return nlbda
