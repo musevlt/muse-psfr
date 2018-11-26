@@ -24,7 +24,7 @@ def test_reconstruction(tmpdir):
     fit = Table.read(res['FIT1'])
     assert np.allclose(fit['center'], 20)
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert np.allclose(fit[1]['fwhm'], 0.84, atol=1e-2)
+    assert np.allclose(fit[1]['fwhm'], 0.85, atol=1e-2)
 
 
 def test_bad_l0(tmpdir, capsys):
@@ -49,7 +49,7 @@ def test_bad_l0(tmpdir, capsys):
     fit = Table.read(res['FIT1'])
     assert np.allclose(fit['center'], 20)
     assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert np.allclose(fit[1]['fwhm'], 0.84, atol=1e-2)
+    assert np.allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
     # --------
     # Test no valid values
@@ -62,13 +62,12 @@ def test_bad_l0(tmpdir, capsys):
             in captured.out.splitlines())
 
 
-
 def test_script(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile)
 
     logfile = os.path.join(str(tmpdir), 'psfrec.log')
-    main([testfile, '--logfile', logfile])
+    main([testfile, '--no-color', '--logfile', logfile])
 
     with open(logfile) as f:
         lines = f.read().splitlines()
@@ -77,8 +76,8 @@ def test_script(tmpdir):
         'OB None None Airmass 0.00-0.00',
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
-        'FWHM 0.84 0.75 0.68',
-        'BETA 2.53 2.30 2.13',
+        'FWHM 0.86 0.74 0.63',
+        'BETA 2.58 2.27 1.94',
         '--------------------------------------------------------------------'
     ]
 
@@ -92,7 +91,7 @@ def test_script(tmpdir):
         main(['--values', '1,0.7,1000'])
 
     logfile = os.path.join(str(tmpdir), 'psfrec2.log')
-    main(['--values', '1,0.7,25', '--logfile', logfile])
+    main(['--no-color', '--values', '1,0.7,25', '--logfile', logfile])
 
     with open(logfile) as f:
         lines = f.read().splitlines()
@@ -100,8 +99,8 @@ def test_script(tmpdir):
     assert lines[2:] == [
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
-        'FWHM 0.84 0.75 0.68',
-        'BETA 2.53 2.30 2.13',
+        'FWHM 0.86 0.74 0.63',
+        'BETA 2.58 2.27 1.94',
         '--------------------------------------------------------------------'
     ]
 
