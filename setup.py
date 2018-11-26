@@ -14,7 +14,7 @@ setup(
     include_package_data=True,
     zip_safe=False,
     install_requires=['mpdaf', 'astropy', 'scipy', 'matplotlib', 'numpy',
-                      'joblib'],
+                      'joblib', 'colorama'],
     entry_points={
         'console_scripts': [
             'psfrec=psfrec.run_psfrec:main',

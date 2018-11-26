@@ -2,7 +2,6 @@ import argparse
 import io
 import sys
 from astropy.io import fits
-import colorama
 from colorama import Fore, Back, Style
 
 from psfrec.psfrec import compute_psf_from_sparta, create_sparta_table
@@ -21,7 +20,7 @@ def reconstruct_psf(rawname, **kwargs):
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description='PSF Reconstruction version beta-1')
+        description=f'PSF Reconstruction version {__version__}')
     parser.add_argument('raw', help='observation Raw file name', nargs='?')
     parser.add_argument('--values', help='Values of seeing, GL, L0, to use '
                         'instead of the raw file, comma-separated.')
@@ -30,6 +29,8 @@ def main(args=None):
     parser.add_argument('--njobs', default=-1, type=int, help='number of '
                         'parallel jobs (by default use all CPUs)')
     parser.add_argument('--verbose', '-v', action='store_true',
+                        help='verbose flag')
+    parser.add_argument('--no-color', action='store_true',
                         help='verbose flag')
 
     args = parser.parse_args(args)
@@ -69,10 +70,26 @@ def main(args=None):
     if header_line:
         f.write(header_line + '\n')
     f.write('-' * 68 + '\n')
-    f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'LBDA ' + Fore.BLUE + ' %.0f'%(lbda[0]*10) + Fore.GREEN + ' %.0f'%(lbda[1]*10) + Fore.RED + ' %.0f'%(lbda[2]*10) + Back.RESET + '\n')
-    f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'FWHM ' + Fore.BLUE + ' %.2f'%(fwhm[0]) + Fore.GREEN + ' %.2f'%(fwhm[1]) + Fore.RED + ' %.2f'%(fwhm[2]) + Back.RESET + '\n')
-    f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'BETA ' + Fore.BLUE + ' %.2f'%(beta[0]) + Fore.GREEN + ' %.2f'%(beta[1]) + Fore.RED + ' %.2f'%(beta[2]) + Back.RESET + '\n')
-    f.write(Style.RESET_ALL + '-' * 68 + '\n')
+    if args.no_color:
+        f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbda * 10))
+        f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhm))
+        f.write('BETA %.2f %.2f %.2f\n' % tuple(beta))
+    else:
+        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'LBDA ' +
+                Fore.BLUE + ' %.0f' % (lbda[0] * 10) +
+                Fore.GREEN + ' %.0f' % (lbda[1] * 10) +
+                Fore.RED + ' %.0f' % (lbda[2] * 10) + Back.RESET + '\n')
+        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'FWHM ' +
+                Fore.BLUE + ' %.2f' % (fwhm[0]) +
+                Fore.GREEN + ' %.2f' % (fwhm[1]) +
+                Fore.RED + ' %.2f' % (fwhm[2]) + Back.RESET + '\n')
+        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'BETA ' +
+                Fore.BLUE + ' %.2f' % (beta[0]) +
+                Fore.GREEN + ' %.2f' % (beta[1]) +
+                Fore.RED + ' %.2f' % (beta[2]) + Back.RESET + '\n')
+        f.write(Style.RESET_ALL)
+
+    f.write('-' * 68 + '\n')
 
     f.seek(0)
     print('\n' + f.read())
