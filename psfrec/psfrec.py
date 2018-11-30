@@ -22,6 +22,9 @@ from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
 from scipy.signal import fftconvolve
 
+MIN_L0 = 10 #  minimum L0 in m
+MAX_L0 = 40 #  maximum L0 in m
+
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
                   npsflin=1, dim=1280, only_three_lgs=False):
@@ -913,9 +916,10 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
                        for k in range(1, 5)])
 
     # check if there are some bad values, apparently the 4th value is
-    # often crap. Check if  GL > 0 and L0 < 100
+    # often crap. Check if  GL > MIN_L0 and L0 < MAX_L0
     check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
-                            (values[:, 2] < 100))  # L0 < 100
+                            (values[:, 2] < MAX_L0) & # L0 < MAX_L0
+                            (values[:, 2] > MIN_L0))  # L0 > MIN_L0
 
     nb_gs = np.sum(check_non_null_laser)
     irow = row.index + 1
@@ -923,15 +927,17 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
     if nb_gs == 0:
         print('{}/{} : No valid values, skipping this row'.format(irow, nrows))
-        print(values)
+        #print(values)
         return
     elif nb_gs < 4:
         print('{}/{} : Using only {} values out of 4 after outliers rejection'
               .format(irow, nrows, nb_gs))
 
     seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
+
+
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
-          .format(irow, nrows, seeing, GL, L0))
+              .format(irow, nrows, seeing, GL, L0))
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
