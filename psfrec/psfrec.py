@@ -22,8 +22,8 @@ from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
 from scipy.signal import fftconvolve
 
-MIN_L0 = 8 #  minimum L0 in m
-MAX_L0 = 30 #  maximum L0 in m
+MIN_L0 = 8   # minimum L0 in m
+MAX_L0 = 30  # maximum L0 in m
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,

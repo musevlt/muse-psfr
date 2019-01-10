@@ -4,9 +4,14 @@ from setuptools import setup, find_packages
 if sys.version_info < (3, 5):
     raise Exception('python 3.5 or newer is required')
 
+# read version.py
+__version__ = None
+with open('psfrec/version.py') as f:
+    exec(f.read())
+
 setup(
     name='psfrec',
-    version='0.1',
+    version=__version__,
     description='MUSE WFM-AO PSF reconstruction from SPARTA',
     author='Simon Conseil',
     author_email='simon.conseil@univ-lyon1.fr',
