@@ -1,0 +1,21 @@
+0.3
+---
+
+- Improve MUSE PSF model.
+- Better limits to reject aberrant values from SPARTA.
+
+0.2
+---
+
+- Replace empirical seeing correction with PSF models.
+- Better handling of files with invalid values
+
+0.11
+----
+
+- Add 3 lasers mode.
+
+0.1
+---
+
+First release.
