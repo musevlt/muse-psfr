@@ -1,11 +1,5 @@
-=====================================
-WFM-AO PSF reconstruction from SPARTA
-=====================================
+PSFRec - PSF reconstruction for MUSE WFM-AO
+===========================================
 
-This repository contains a code which allows to reconstruct a PSF for the WFM-AO
-mode, using telemetry data from SPARTA.
-
-Original code was written in IDL by Thierry Fusco <thierry.fusco@onera.fr> (and
-other people ?).
-
-Code was ported to Python by Simon Conseil <simon.conseil@univ-lyon1.fr>.
+The PSFRec code allows to reconstruct a PSF for the MUSE WFM-AO mode, using
+telemetry data from SPARTA. See documentation for details.
