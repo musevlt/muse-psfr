@@ -16,7 +16,6 @@ from astropy.io import fits
 from astropy.table import Table, Column
 from joblib import Parallel, delayed
 from math import gamma
-from matplotlib.colors import LogNorm
 from mpdaf.obj import Cube
 from numpy.fft import fft2, ifft2, fftshift
 from scipy.interpolate import interpn
@@ -819,6 +818,7 @@ def radial_profile(arr, binsize=1):
 
 def plot_psf(filename):
     import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
     psf = Cube(filename, ext='PSF_MEAN')
     fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
     ax1, ax2, ax3, ax4 = axes.flat
@@ -937,7 +937,7 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
 
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
-              .format(irow, nrows, seeing, GL, L0))
+          .format(irow, nrows, seeing, GL, L0))
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,

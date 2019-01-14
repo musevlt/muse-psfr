@@ -2,7 +2,6 @@ import argparse
 import io
 import sys
 from astropy.io import fits
-from colorama import Fore, Back, Style
 
 from psfrec.psfrec import compute_psf_from_sparta, create_sparta_table
 from psfrec.version import __version__
@@ -70,11 +69,18 @@ def main(args=None):
     if header_line:
         f.write(header_line + '\n')
     f.write('-' * 68 + '\n')
+
+    try:
+        import colorama  # noqa
+    except ImportError:
+        args.no_color = True
+
     if args.no_color:
         f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbda * 10))
         f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhm))
         f.write('BETA %.2f %.2f %.2f\n' % tuple(beta))
     else:
+        from colorama import Fore, Back, Style
         f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'LBDA ' +
                 Fore.BLUE + ' %.0f' % (lbda[0] * 10) +
                 Fore.GREEN + ' %.0f' % (lbda[1] * 10) +
