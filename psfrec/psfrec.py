@@ -25,7 +25,7 @@ MIN_L0 = 8   # minimum L0 in m
 MAX_L0 = 30  # maximum L0 in m
 
 
-def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
+def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
                   npsflin=1, dim=1280, only_three_lgs=False):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
 
@@ -88,7 +88,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
 
     # Step 0.3 : Direction d'estimation
     field_size = 60
-    dirperf = direction_perf(field_size, npsflin, visu=visu, lgs=poslgs)
+    dirperf = direction_perf(field_size, npsflin, plot=plot, lgs=poslgs)
 
     # Step 0.4 : Paremetres numériques
     # ---------
@@ -144,26 +144,28 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., visu=False, verbose=False,
     return dspf * (lambdaref * 1000 / (2 * np.pi)) ** 2
 
 
-def direction_perf(field_size, npts, visu=False, lgs=None, ngs=None):
+def direction_perf(field_size, npts, plot=False, lgs=None, ngs=None):
     """Create a grid of points where the PSF is estimated."""
     x, y = (np.mgrid[:npts, :npts] - npts // 2) * field_size / 2
     dirperf = np.array([x, y]).reshape(2, -1)
 
-    if visu:  # pragma: no cover
+    if plot:  # pragma: no cover
         import matplotlib.pyplot as plt
         champvisu = np.max(dirperf)
-        plt.scatter(dirperf[0], dirperf[1], marker='o', s=10)
+        plt.scatter(dirperf[0], dirperf[1], marker='o', s=10,
+                    label='Reconstruction directions')
         if lgs is not None:
             champvisu = max(champvisu, lgs.max())
-            plt.scatter(lgs[0], lgs[1], marker='*', s=60)
+            plt.scatter(lgs[0], lgs[1], marker='*', s=60, label='LGS')
         if ngs is not None:
             champvisu = max(champvisu, ngs.max())
-            plt.scatter(ngs[0], ngs[1], marker='*', s=40)
+            plt.scatter(ngs[0], ngs[1], marker='*', s=40, label='NGS')
 
         plt.xlim((-1.25 * champvisu, 1.25 * champvisu))
         plt.ylim((-1.25 * champvisu, 1.25 * champvisu))
         plt.xlabel('arcsecond')
         plt.ylabel('arcsecond')
+        plt.legend(loc='upper center')
         plt.show()
 
     return dirperf
@@ -909,7 +911,7 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
+def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False, plot=False):
     # use the mean value for the 4 LGS for the seeing, GL, and L0
     values = np.array([[row['LGS%d_%s' % (k, col)]
                         for col in ('SEEING', 'TUR_GND', 'L0')]
@@ -941,7 +943,8 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
-                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4))
+                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4),
+                        plot=plot)
 
     # et voila la/les PSD.
     # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
@@ -971,7 +974,7 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, h=(100, 15000),
-                            verbose=False, n_jobs=-1):
+                            verbose=False, n_jobs=-1, plot=False):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -1001,7 +1004,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     print('Processing SPARTA table with {} values, njobs={} ...'
           .format(len(tbl), n_jobs))
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
-        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
+        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose,
+                             plot=plot)
         for row in tbl)
 
     # filter values that could not be computed

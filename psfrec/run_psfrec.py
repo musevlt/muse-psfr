@@ -4,7 +4,8 @@ import sys
 from astropy.io import fits
 from mpdaf.tools import deprecated
 
-from psfrec.psfrec import compute_psf_from_sparta, create_sparta_table
+from psfrec.psfrec import (compute_psf_from_sparta, create_sparta_table,
+                           plot_psf)
 from psfrec.version import __version__
 
 
@@ -22,20 +23,19 @@ def reconstruct_psf(rawname, **kwargs):
 def main(args=None):
     parser = argparse.ArgumentParser(
         description=f'PSF Reconstruction version {__version__}')
-    parser.add_argument('raw', help='observation Raw file name', nargs='?')
-    parser.add_argument('--values', help='Values of seeing, GL, L0, to use '
-                        'instead of the raw file, comma-separated.')
-    parser.add_argument('--logfile', default='psfrec.log',
-                        help='Name of log file')
-    parser.add_argument('-o', '--outfile', help='Name of a FITS file in which '
-                        'the results are saved: table with individual and '
-                        'mean Moffat fits, and mean reconstructed PSF')
-    parser.add_argument('--njobs', default=-1, type=int, help='number of '
-                        'parallel jobs (by default use all CPUs)')
-    parser.add_argument('--verbose', '-v', action='store_true',
-                        help='verbose flag')
-    parser.add_argument('--no-color', action='store_true',
-                        help='verbose flag')
+    addarg = parser.add_argument
+    addarg('raw', help='observation Raw file name', nargs='?')
+    addarg('--values', help='Values of seeing, GL, L0, to use instead of the '
+           'raw file, comma-separated.')
+    addarg('--logfile', default='psfrec.log', help='Name of log file')
+    addarg('-o', '--outfile', help='Name of a FITS file in which the results '
+           'are saved: table with individual and mean Moffat fits, and mean '
+           'reconstructed PSF')
+    addarg('--njobs', default=-1, type=int, help='number of parallel jobs '
+           '(by default use all CPUs)')
+    addarg('--verbose', '-v', action='store_true', help='verbose flag')
+    addarg('--no-color', action='store_true', help='no color in output')
+    addarg('--plot', action='store_true', help='plot reconstructed psf')
 
     args = parser.parse_args(args)
 
@@ -66,7 +66,8 @@ def main(args=None):
 
     print('Computing PSF Reconstruction from Sparta data')
     res = compute_psf_from_sparta(rawf, verbose=args.verbose, lmin=500,
-                                  lmax=900, nl=3, n_jobs=args.njobs)
+                                  lmax=900, nl=3, n_jobs=args.njobs,
+                                  plot=args.plot)
     if res:
         data = res['FIT_MEAN'].data
         lbda, fwhm, beta = data['lbda'], data['fwhm'][:, 0], data['n']
@@ -118,3 +119,15 @@ def main(args=None):
     if args.outfile is not None:
         res.writeto(args.outfile, overwrite=True)
         print('FITS file saved to %s' % args.outfile)
+
+    if args.plot is not None:
+        if args.outfile is not None:
+            plot_psf(args.outfile)
+        else:
+            import matplotlib.pyplot as plt
+            import tempfile
+            f = tempfile.NamedTemporaryFile(suffix='.fits')
+            res.writeto(f)
+            plot_psf(f.name)
+            plt.show()
+            f.close()
