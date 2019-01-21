@@ -1,11 +1,13 @@
 PSFRec - PSF reconstruction for MUSE WFM-AO
 ===========================================
 
-The PSFRec code allows to reconstruct a PSF for the MUSE WFM-AO mode, using
-telemetry data from SPARTA.
+The PSFRec code allows to reconstruct a PSF for the `MUSE WFM-AO
+<https://www.eso.org/sci/facilities/paranal/instruments/muse/inst.html>`_ mode,
+using telemetry data from `SPARTA
+<https://www.eso.org/sci/facilities/develop/ao/tecno/sparta.html>`_.
 
 Original code was written in IDL by `Thierry Fusco <thierry.fusco@onera.fr>`__
-and `Benoit Neichel <benoit.neichel@lam.fr>`__. It was then ported to Python by
+and `Benoit Neichel <benoit.neichel@lam.fr>`__. It was ported to Python by
 `Simon Conseil <simon.conseil@univ-lyon1.fr>`__.
 
 The paper describing the original method can be found here:
@@ -20,7 +22,7 @@ PSFRec requires the following packages:
 
 * Numpy
 * Astropy
-* SciPy 
+* SciPy
 * MPDAF
 * Joblib
 * Matplotlib (optional, for the PSF plot)
@@ -37,6 +39,46 @@ Or to install with optional dependencies::
 Or into the user path with::
 
     pip install --user psfrec
+
+How it works
+============
+
+Brief description, TODO.
+
+
+Inputs
+------
+
+The PSF reconstruction algorithm needs 3 values provided by SPARTA: the
+*seeing*, the *Ground Layer fraction (GL)*, and *L0*. These values can be
+provided directly as command-line arguments (see below), but the typical use is
+to provide a raw MUSE file.
+
+Since the GLAO commissioning, the MUSE raw files contain a FITS table
+(``SPARTA_ATM_DATA``) containing the atmospheric turbulence profile estimated
+by SPARTA. This table contains the values for each laser, with one row every
+two minutes.
+
+Number of reconstructed wavelengths
+-----------------------------------
+
+To reduce computation time, the ``psfrec`` command reconstructs the PSF at
+three wavelengths: 500nm, 700nm, and 900nm. But it is possible to reconstruct
+the PSF at any wavelength, with the `compute_psf_from_sparta` function. This
+function reconstructs by default for 35 wavelengths between 490nm and 930nm
+(which can specified with the *lmin*, *lmax*, and *nl* parameters).
+
+Number of reconstructed direction
+---------------------------------
+
+Since the spatial variation is negligible over the MUSE field of view, the
+reconstruction is done by default only at the center of field. This can be
+changed in `compute_psf_from_sparta` with the *npsflin* parameter.
+
+Altitude of the ground and high layers ?
+----------------------------------------
+
+FIXME: shall we describe this?
 
 Usage
 =====

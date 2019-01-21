@@ -993,6 +993,11 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         Altitude of the ground and high layers (m).
     verbose : bool
         Verbose output.
+    n_jobs : int
+        Number of parallel processes to process the rows of the SPARTA table.
+    plot : bool
+        If True, plots the configuration if the AO system (positions of the
+        LGS and the directions of reconstruction).
 
     """
     with fits.open(filename) as hdul:
