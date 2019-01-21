@@ -1,3 +1,11 @@
+0.31.dev
+--------
+
+- Skip sparta row when L0<10 or L0>30.
+- Merge individual Moffat fits in one table.
+- Add command-line options (``--plot``, ``--outfile``).
+- Add documentation.
+
 0.3
 ---
 

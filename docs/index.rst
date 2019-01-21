@@ -87,21 +87,9 @@ Command Line Interface
 ----------------------
 
 PSFRec can be used from the command line, either with a set of seeing, GL, and
-L0 values::
+L0 values:
 
-   $ psfrec --values 1,0.7,25
-   PSFRec version 0.31
-   Computing PSF Reconstruction from Sparta data
-   Processing SPARTA table with 1 values, njobs=1 ...
-   1/1 : seeing=1.00 GL=0.70 L0=25.00
-
-   --------------------------------------------------------------------
-   LBDA  5000 7000 9000
-   FWHM  0.86 0.74 0.63
-   BETA  2.58 2.27 1.94
-   --------------------------------------------------------------------
-
-   Results saved to psfrec.log
+.. command-output:: psfrec --values 1,0.7,25
 
 Or with a MUSE raw FITS file, that contains a ``SPARTA_ATM_DATA`` extension::
 
@@ -131,9 +119,9 @@ Or with a MUSE raw FITS file, that contains a ``SPARTA_ATM_DATA`` extension::
    Results saved to psfrec.log
 
 More information use of the command line interface can be found with the
-command ::
+command:
 
-    $ psfrec -h
+.. command-output:: psfrec --help
 
 By default it saves the computed values in a log file (``psfrec.log``). It is
 also possible to save a FITS file with the fit results for all wavelengths and
@@ -153,10 +141,9 @@ a SPARTA table,
    >>> tbl.data
    FITS_rec([(25, 1, 0.7, 25, 1, 0.7, 25, 1, 0.7, 25, 1, 0.7)],
             dtype=(numpy.record, [('LGS1_L0', '<i8'), ('LGS1_SEEING', '<i8'), ('LGS1_TUR_GND', '<f8'), ('LGS2_L0', '<i8'), ('LGS2_SEEING', '<i8'), ('LGS2_TUR_GND', '<f8'), ('LGS3_L0', '<i8'), ('LGS3_SEEING', '<i8'), ('LGS3_TUR_GND', '<f8'), ('LGS4_L0', '<i8'), ('LGS4_SEEING', '<i8'), ('LGS4_TUR_GND', '<f8')]))
-   >>> import tempfile
-   >>> f = tempfile.NamedTemporaryFile(suffix='.fits')
-   >>> tbl.writeto(f)
-   >>> out = compute_psf_from_sparta(f.name, lmin=500, lmax=900, nl=3, plot=True)
+   >>> from astropy.io import fits
+   >>> hdul = fits.HDUList([tbl])
+   >>> out = compute_psf_from_sparta(hdul, lmin=500, lmax=900, nl=3, plot=True)
    Processing SPARTA table with 1 values, njobs=1 ...
    1/1 : seeing=1.00 GL=0.70 L0=25.00
 
@@ -170,3 +157,5 @@ API
 ===
 
 .. autofunction:: psfrec.compute_psf_from_sparta
+
+.. autofunction:: psfrec.create_sparta_table
