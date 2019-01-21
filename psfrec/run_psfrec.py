@@ -22,11 +22,11 @@ def main(args=None):
     parser = argparse.ArgumentParser(
         description=f'PSF Reconstruction version {__version__}')
     addarg = parser.add_argument
-    addarg('raw', help='observation Raw file name', nargs='?')
-    addarg('--values', help='Values of seeing, GL, L0, to use instead of the '
-           'raw file, comma-separated.')
+    addarg('raw', help='observation raw file name', nargs='?')
+    addarg('--values', help='values of seeing, GL, L0, to use instead of the '
+           'raw file, comma-separated')
     addarg('--logfile', default='psfrec.log', help='Name of log file')
-    addarg('-o', '--outfile', help='Name of a FITS file in which the results '
+    addarg('-o', '--outfile', help='name of a FITS file in which the results '
            'are saved: table with individual and mean Moffat fits, and mean '
            'reconstructed PSF')
     addarg('--njobs', default=-1, type=int, help='number of parallel jobs '
