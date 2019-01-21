@@ -1,5 +1,4 @@
 from .psfrec import *
-from .run_psfrec import reconstruct_psf
 
 from pkg_resources import get_distribution, DistributionNotFound
 try:
