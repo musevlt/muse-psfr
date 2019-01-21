@@ -2,6 +2,7 @@ import numpy as np
 import os
 import pytest
 from astropy.table import Table
+from numpy.testing import assert_allclose
 
 from psfrec import compute_psf_from_sparta, plot_psf, create_sparta_table
 from psfrec.run_psfrec import main
@@ -12,19 +13,18 @@ def test_reconstruction(tmpdir):
     create_sparta_table(outfile=testfile)
 
     # Note: the case when npsflin=1 is tested below with test_script
-    res = compute_psf_from_sparta(testfile, npsflin=3, lmin=490, lmax=930,
-                                  nl=35, verbose=True)
+    res = compute_psf_from_sparta(testfile, npsflin=3, lmin=490, lmax=541.76,
+                                  nl=5, verbose=True)
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
     res.writeto(outfile, overwrite=True)
     assert len(res) == 5
     # check that meta are correctly saved
-    fit = Table.read(res['FIT1'])
-    assert fit.meta['L0'] == 25.
+    fit = Table.read(res['FIT_ROWS'])
+    assert_allclose(fit['L0'], 25)
     # check fit result
-    fit = Table.read(res['FIT1'])
-    assert np.allclose(fit['center'], 20)
-    assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert np.allclose(fit[1]['fwhm'], 0.85, atol=1e-2)
+    assert_allclose(fit['center'], 20)
+    assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
+    assert_allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
 
 def test_bad_l0(tmpdir, capsys):
@@ -32,7 +32,8 @@ def test_bad_l0(tmpdir, capsys):
     create_sparta_table(outfile=testfile, bad_l0=True)
 
     # Note: the case when npsflin=1 is tested below with test_script
-    res = compute_psf_from_sparta(testfile, verbose=True)
+    res = compute_psf_from_sparta(testfile, lmin=490, lmax=541.76, nl=5,
+                                  verbose=True)
 
     captured = capsys.readouterr()
     assert ('1/1 : Using only 3 values out of 4 after outliers rejection'
@@ -43,13 +44,12 @@ def test_bad_l0(tmpdir, capsys):
     res.writeto(outfile, overwrite=True)
     assert len(res) == 5
     # check that meta are correctly saved
-    fit = Table.read(res['FIT1'])
-    assert fit.meta['L0'] == 25.
+    fit = Table.read(res['FIT_ROWS'])
+    assert_allclose(fit['L0'], 25)
     # check fit result
-    fit = Table.read(res['FIT1'])
-    assert np.allclose(fit['center'], 20)
-    assert np.allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert np.allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
+    assert_allclose(fit['center'], 20)
+    assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
+    assert_allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
     # --------
     # Test no valid values

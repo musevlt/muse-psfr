@@ -13,7 +13,7 @@ import numpy as np
 import os
 from astropy.convolution import Moffat2DKernel
 from astropy.io import fits
-from astropy.table import Table, Column
+from astropy.table import Table, Column, vstack
 from joblib import Parallel, delayed
 from math import gamma
 from mpdaf.obj import Cube
@@ -917,9 +917,9 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
     # check if there are some bad values, apparently the 4th value is
     # often crap. Check if  GL > MIN_L0 and L0 < MAX_L0
-    check_non_null_laser = ((values[:, 1] > 0) &   # GL > 0
-                            (values[:, 2] < MAX_L0) & # L0 < MAX_L0
-                            (values[:, 2] > MIN_L0))  # L0 > MIN_L0
+    check_non_null_laser = ((values[:, 1] > 0) &       # GL > 0
+                            (values[:, 2] < MAX_L0) &  # L0 < MAX_L0
+                            (values[:, 2] > MIN_L0))   # L0 > MIN_L0
 
     nb_gs = np.sum(check_non_null_laser)
     irow = row.index + 1
@@ -927,14 +927,14 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
 
     if nb_gs == 0:
         print('{}/{} : No valid values, skipping this row'.format(irow, nrows))
-        #print(values)
+        if verbose:
+            print('Values:', values)
         return
     elif nb_gs < 4:
         print('{}/{} : Using only {} values out of 4 after outliers rejection'
               .format(irow, nrows, nb_gs))
 
     seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
-
 
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
           .format(irow, nrows, seeing, GL, L0))
@@ -962,9 +962,11 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     # fit all planes with a Moffat and store fit parameters
     res = fit_psf_cube(lbda, Cube(data=psf, copy=False))
     res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
-    hdu = fits.table_to_hdu(res)
-    hdu.name = 'FIT%d' % irow
-    return hdu, psf
+    res['SEEING'] = seeing
+    res['GL'] = GL
+    res['L0'] = L0
+    res['row_idx'] = irow
+    return res, psf
 
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
@@ -1008,10 +1010,19 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         print('File contain not valid values')
         return
 
-    hdus, psftot = zip(*res)
-    out += hdus
-    stats = [(hdu.header['SEEING'], hdu.header['GL'], hdu.header['L0'])
-             for hdu in hdus]
+    # get fit table and psf for each row
+    tables, psftot = zip(*res)
+    stats = [(tbl.meta['SEEING'], tbl.meta['GL'], tbl.meta['L0'])
+             for tbl in tables]
+
+    # store fit values for all rows in a big table
+    tbl = vstack(tables, metadata_conflicts='silent')
+    hdu = fits.table_to_hdu(tbl)
+    hdu.header.remove('SEEING')
+    hdu.header.remove('GL')
+    hdu.header.remove('L0')
+    hdu.name = 'FIT_ROWS'
+    out.append(hdu)
 
     # compute the mean PSF and store PSF and fit parameters
     lbda = np.linspace(lmin, lmax, nl)
