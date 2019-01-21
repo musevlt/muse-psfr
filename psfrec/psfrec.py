@@ -857,6 +857,7 @@ def plot_psf(filename, npsflin=1):
 
 
 def fit_psf_cube(lbda, psfcube):
+    """Fit a Moffat PSF on each wavelength plane of the psfcube."""
     res = [im.moffat_fit(unit_center=None, unit_fwhm=None,
                          circular=True, fit_back=False, verbose=False)
            for im in psfcube]
@@ -869,6 +870,7 @@ def fit_psf_cube(lbda, psfcube):
 
 
 def convolve_final_psf(lbda, seeing, GL, L0, psf):
+    """Convolve with tip-tilt and MUSE PSF to get the final PSF."""
 
     # 1. Convolve with Tip-tilt, beta=1.5
     # -----------------------------------
@@ -993,7 +995,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
 
     Parameters
     ----------
-    filename : str
+    filename : str or `astropy.io.fits.HDUList`
         FITS file containing a SPARTA table.
     extname : str
         Name of the SPARTA extension (defaults to SPARTA_ATM_DATA).
@@ -1069,6 +1071,9 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
 
 def create_sparta_table(nlines=1, seeing=1, L0=25, GL=0.7, bad_l0=False,
                         outfile=None):
+    """Helper function to create a SPARTA table with the given seeing, L0, and
+    GL values.
+    """
     # Create a SPARTA table with values for the 4 LGS
     Cn2 = [GL, 1 - GL]
     tbl = [('LGS%d_%s' % (k, col), v) for k in range(1, 5)

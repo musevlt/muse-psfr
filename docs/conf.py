@@ -53,7 +53,10 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinx.ext.viewcode',
     'sphinx.ext.napoleon',
+    'matplotlib.sphinxext.plot_directive',
 ]
+
+plot_include_source = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -208,4 +211,10 @@ epub_exclude_files = ['search.html']
 # -- Options for intersphinx extension ---------------------------------------
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None}
+intersphinx_mapping = {
+    'python': ('https://docs.python.org/3/', None),
+    # 'numpy': ('https://docs.scipy.org/doc/numpy/', None),
+    # 'scipy': ('https://docs.scipy.org/doc/scipy/reference/', None),
+    # 'matplotlib': ('https://matplotlib.org/', None),
+    'astropy': ('http://docs.astropy.org/en/stable/', None),
+}

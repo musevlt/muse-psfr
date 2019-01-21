@@ -64,16 +64,16 @@ Number of reconstructed wavelengths
 
 To reduce computation time, the ``psfrec`` command reconstructs the PSF at
 three wavelengths: 500nm, 700nm, and 900nm. But it is possible to reconstruct
-the PSF at any wavelength, with the `compute_psf_from_sparta` function. This
-function reconstructs by default for 35 wavelengths between 490nm and 930nm
-(which can specified with the *lmin*, *lmax*, and *nl* parameters).
+the PSF at any wavelength, with the `~psfrec.compute_psf_from_sparta` function.
+This function reconstructs by default for 35 wavelengths between 490nm and
+930nm (which can specified with the *lmin*, *lmax*, and *nl* parameters).
 
 Number of reconstructed direction
 ---------------------------------
 
 Since the spatial variation is negligible over the MUSE field of view, the
 reconstruction is done by default only at the center of field. This can be
-changed in `compute_psf_from_sparta` with the *npsflin* parameter.
+changed in `~psfrec.compute_psf_from_sparta` with the *npsflin* parameter.
 
 Altitude of the ground and high layers ?
 ----------------------------------------
@@ -133,10 +133,33 @@ Or with a MUSE raw FITS file, that contains a ``SPARTA_ATM_DATA`` extension::
 More information use of the command line interface can be found with the
 command ::
 
-    psfrec -h
+    $ psfrec -h
+
+By default it saves the computed values in a log file (``psfrec.log``). It is
+also possible to save a FITS file with the fit results for all wavelengths and
+all SPARTA rows with the ``--outfile`` option.
 
 Python interface
 ----------------
+
+The main entry point for the Python interface is the
+`~psfrec.compute_psf_from_sparta` function. This function takes a file with
+a SPARTA table,
+
+.. plot::
+
+   >>> from psfrec import compute_psf_from_sparta, create_sparta_table
+   >>> tbl = create_sparta_table(seeing=1, L0=25, GL=0.7)
+   >>> tbl.data
+   FITS_rec([(25, 1, 0.7, 25, 1, 0.7, 25, 1, 0.7, 25, 1, 0.7)],
+            dtype=(numpy.record, [('LGS1_L0', '<i8'), ('LGS1_SEEING', '<i8'), ('LGS1_TUR_GND', '<f8'), ('LGS2_L0', '<i8'), ('LGS2_SEEING', '<i8'), ('LGS2_TUR_GND', '<f8'), ('LGS3_L0', '<i8'), ('LGS3_SEEING', '<i8'), ('LGS3_TUR_GND', '<f8'), ('LGS4_L0', '<i8'), ('LGS4_SEEING', '<i8'), ('LGS4_TUR_GND', '<f8')]))
+   >>> import tempfile
+   >>> f = tempfile.NamedTemporaryFile(suffix='.fits')
+   >>> tbl.writeto(f)
+   >>> out = compute_psf_from_sparta(f.name, lmin=500, lmax=900, nl=3, plot=True)
+   Processing SPARTA table with 1 values, njobs=1 ...
+   1/1 : seeing=1.00 GL=0.70 L0=25.00
+
 
 Changelog
 =========
