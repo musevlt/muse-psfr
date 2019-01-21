@@ -87,8 +87,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
     recons_h = altDM   # a priori sur h   => ici GLAO
 
     # Step 0.3 : Direction d'estimation
-    field_size = 60
-    dirperf = direction_perf(field_size, npsflin, plot=plot, lgs=poslgs)
+    dirperf = direction_perf(npsflin, plot=plot, lgs=poslgs)
 
     # Step 0.4 : Paremetres numériques
     # ---------
@@ -144,29 +143,33 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
     return dspf * (lambdaref * 1000 / (2 * np.pi)) ** 2
 
 
-def direction_perf(field_size, npts, plot=False, lgs=None, ngs=None):
+def direction_perf(npts, field_size=60, plot=False, lgs=None, ngs=None,
+                   ax=None):
     """Create a grid of points where the PSF is estimated."""
     x, y = (np.mgrid[:npts, :npts] - npts // 2) * field_size / 2
     dirperf = np.array([x, y]).reshape(2, -1)
 
     if plot:  # pragma: no cover
         import matplotlib.pyplot as plt
+        if ax is None:
+            fig, ax = plt.subplots()
         champvisu = np.max(dirperf)
-        plt.scatter(dirperf[0], dirperf[1], marker='o', s=10,
-                    label='Reconstruction directions')
+        ax.scatter(dirperf[0], dirperf[1], marker='o', s=10,
+                   label='Reconstruction directions')
         if lgs is not None:
             champvisu = max(champvisu, lgs.max())
-            plt.scatter(lgs[0], lgs[1], marker='*', s=60, label='LGS')
+            ax.scatter(lgs[0], lgs[1], marker='*', s=60, label='LGS')
         if ngs is not None:
             champvisu = max(champvisu, ngs.max())
-            plt.scatter(ngs[0], ngs[1], marker='*', s=40, label='NGS')
+            ax.scatter(ngs[0], ngs[1], marker='*', s=40, label='NGS')
 
-        plt.xlim((-1.25 * champvisu, 1.25 * champvisu))
-        plt.ylim((-1.25 * champvisu, 1.25 * champvisu))
-        plt.xlabel('arcsecond')
-        plt.ylabel('arcsecond')
-        plt.legend(loc='upper center')
-        plt.show()
+        ax.set_xlim((-1.25 * champvisu, 1.25 * champvisu))
+        ax.set_ylim((-1.25 * champvisu, 1.25 * champvisu))
+        ax.set_xlabel('arcsecond')
+        ax.set_ylabel('arcsecond')
+        ax.legend(loc='upper center')
+        if ax is None:
+            plt.show()
 
     return dirperf
 
@@ -818,26 +821,38 @@ def radial_profile(arr, binsize=1):
     return bin_centers, radial_prof / nr
 
 
-def plot_psf(filename):
+def plot_psf(filename, npsflin=1):
     import matplotlib.pyplot as plt
     from matplotlib.colors import LogNorm
-    psf = Cube(filename, ext='PSF_MEAN')
-    fig, axes = plt.subplots(2, 2, figsize=(8, 6), tight_layout=True)
-    ax1, ax2, ax3, ax4 = axes.flat
-    im = ax1.imshow(psf.data[1], origin='lower', norm=LogNorm())
+    if isinstance(filename, fits.HDUList):
+        psf = filename['PSF_MEAN'].data
+    else:
+        psf = fits.getdata(filename, extname='PSF_MEAN')
+    fig, axes = plt.subplots(2, 3, figsize=(12, 6), tight_layout=True)
+    ax1, ax2, ax3 = axes[0]
+    im = ax1.imshow(psf[1], origin='lower', norm=LogNorm())
     fig.colorbar(im, ax=ax1)
-    ax1.set_title('PSF @500nm')
+    ax1.set_title('PSF')
 
-    center, radial_prof = radial_profile(psf.data[1])
-    ax2.plot(center[1:], radial_prof[1:], lw=1)
-    ax2.set_yscale('log')
-    ax2.set_title('radial profile')
+    ax2.axis('off')
+
+    seplgs = 63.       # separation (en rayon) des LGS [arcsec]
+    poslgs = np.array([[1, 1], [-1, -1], [-1, 1], [1, -1]], dtype=float).T
+    poslgs *= seplgs   # *cos(pi/4) # position sur une grille cartesienne
+    direction_perf(npsflin, plot=True, lgs=poslgs, ax=ax3)
+
+    ax1, ax2, ax3 = axes[1]
+    center, radial_prof = radial_profile(psf[1])
+    ax1.plot(center[1:], radial_prof[1:], lw=1)
+    ax1.set_yscale('log')
+    ax1.set_title('radial profile')
 
     fit = Table.read(filename, hdu='FIT_MEAN')
-    ax3.plot(fit['lbda'], fit['fwhm'][:, 0])
-    ax3.set_title(r'$FWHM(\lambda)$')
-    ax4.plot(fit['lbda'], fit['n'])
-    ax4.set_title(r'$\beta(\lambda)$')
+    ax2.plot(fit['lbda'], fit['fwhm'][:, 0])
+    ax2.set_title(r'$FWHM(\lambda)$')
+    ax3.plot(fit['lbda'], fit['n'])
+    ax3.set_title(r'$\beta(\lambda)$')
+
     return fig
 
 
@@ -911,7 +926,7 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False, plot=False):
+def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     # use the mean value for the 4 LGS for the seeing, GL, and L0
     values = np.array([[row['LGS%d_%s' % (k, col)]
                         for col in ('SEEING', 'TUR_GND', 'L0')]
@@ -943,8 +958,7 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False, plot=False):
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
-                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4),
-                        plot=plot)
+                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4))
 
     # et voila la/les PSD.
     # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
@@ -1009,8 +1023,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     print('Processing SPARTA table with {} values, njobs={} ...'
           .format(len(tbl), n_jobs))
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
-        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose,
-                             plot=plot)
+        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
         for row in tbl)
 
     # filter values that could not be computed
@@ -1045,6 +1058,11 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     hdu.name = 'FIT_MEAN'
     out.append(hdu)
     out.append(fits.ImageHDU(data=psftot, name='PSF_MEAN'))
+
+    if plot:
+        import matplotlib.pyplot as plt
+        plot_psf(out, npsflin=npsflin)
+        plt.show()
 
     return out
 

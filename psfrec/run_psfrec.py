@@ -4,8 +4,7 @@ import sys
 from astropy.io import fits
 from mpdaf.tools import deprecated
 
-from psfrec.psfrec import (compute_psf_from_sparta, create_sparta_table,
-                           plot_psf)
+from psfrec.psfrec import compute_psf_from_sparta, create_sparta_table
 from psfrec.version import __version__
 
 
@@ -119,15 +118,3 @@ def main(args=None):
     if args.outfile is not None:
         res.writeto(args.outfile, overwrite=True)
         print('FITS file saved to %s' % args.outfile)
-
-    if args.plot is not None:
-        if args.outfile is not None:
-            plot_psf(args.outfile)
-        else:
-            import matplotlib.pyplot as plt
-            import tempfile
-            f = tempfile.NamedTemporaryFile(suffix='.fits')
-            res.writeto(f)
-            plot_psf(f.name)
-            plt.show()
-            f.close()
