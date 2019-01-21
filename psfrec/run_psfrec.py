@@ -4,8 +4,7 @@ import sys
 from astropy.io import fits
 from mpdaf.tools import deprecated
 
-from psfrec.psfrec import compute_psf_from_sparta, create_sparta_table
-from psfrec.version import __version__
+from psfrec import __version__, compute_psf_from_sparta, create_sparta_table
 
 
 @deprecated('Use compute_psf_from_sparta instead')

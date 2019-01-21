@@ -10,17 +10,9 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
-import re
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
-
-
-pkgmeta = {}
-psfrecdir = os.path.join(os.path.dirname(__file__), '..', 'psfrec')
-
-with open(os.path.join(psfrecdir, 'version.py')) as f:
-    code = compile(f.read(), 'version.py', 'exec')
-    exec(code, pkgmeta)
+from pkg_resources import get_distribution
 
 # -- Project information -----------------------------------------------------
 
@@ -28,11 +20,8 @@ project = 'PSFRec'
 copyright = '2019, Simon Conseil, Thierry Fusco'
 author = 'Simon Conseil, Thierry Fusco'
 
-# The short X.Y version
-version = re.match(r'\d+\.\d+', pkgmeta['__version__']).group()
-# The full version, including alpha/beta/rc tags.
-release = pkgmeta['__version__']
-
+release = get_distribution('psfrec').version
+version = '.'.join(release.split('.')[:2])
 
 # -- General configuration ---------------------------------------------------
 
