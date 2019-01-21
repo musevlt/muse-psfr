@@ -1,5 +1,6 @@
 import os
 import pytest
+from astropy.io import fits
 from astropy.table import Table
 from numpy.testing import assert_allclose
 
@@ -8,14 +9,12 @@ from psfrec.run_psfrec import main
 
 
 def test_reconstruction(tmpdir):
-    testfile = os.path.join(str(tmpdir), 'sparta.fits')
-    create_sparta_table(outfile=testfile)
+    tbl = create_sparta_table()
+    hdul = fits.HDUList([tbl])
 
     # Note: the case when npsflin=1 is tested below with test_script
-    res = compute_psf_from_sparta(testfile, npsflin=3, lmin=490, lmax=541.76,
+    res = compute_psf_from_sparta(hdul, npsflin=3, lmin=490, lmax=541.76,
                                   nl=5, verbose=True)
-    outfile = os.path.join(str(tmpdir), 'fitres.fits')
-    res.writeto(outfile, overwrite=True)
     assert len(res) == 5
     # check that meta are correctly saved
     fit = Table.read(res['FIT_ROWS'])
@@ -39,8 +38,6 @@ def test_bad_l0(tmpdir, capsys):
             in captured.out.splitlines())
     assert 'Using three lasers mode' in captured.out.splitlines()
 
-    outfile = os.path.join(str(tmpdir), 'fitres.fits')
-    res.writeto(outfile, overwrite=True)
     assert len(res) == 5
     # check that meta are correctly saved
     fit = Table.read(res['FIT_ROWS'])
@@ -66,7 +63,12 @@ def test_script(tmpdir):
     create_sparta_table(outfile=testfile)
 
     logfile = os.path.join(str(tmpdir), 'psfrec.log')
-    main([testfile, '--no-color', '--logfile', logfile])
+    outfile = os.path.join(str(tmpdir), 'out.fits')
+    main([testfile, '--no-color', '--logfile', logfile, '--outfile', outfile])
+
+    with fits.open(outfile) as hdul:
+        assert [hdu.name for hdu in hdul] == [
+            'PRIMARY', 'SPARTA_ATM_DATA', 'FIT_ROWS', 'FIT_MEAN', 'PSF_MEAN']
 
     with open(logfile) as f:
         lines = f.read().splitlines()
@@ -114,6 +116,9 @@ def test_plot(tmpdir):
     res = compute_psf_from_sparta(testfile, verbose=True)
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
     res.writeto(outfile, overwrite=True)
+
+    fig = plot_psf(res)
+    fig.savefig(str(tmpdir.join('fig.png')))
 
     fig = plot_psf(outfile)
     fig.savefig(str(tmpdir.join('fig.png')))

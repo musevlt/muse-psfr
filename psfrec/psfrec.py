@@ -149,7 +149,7 @@ def direction_perf(npts, field_size=60, plot=False, lgs=None, ngs=None,
     x, y = (np.mgrid[:npts, :npts] - npts // 2) * field_size / 2
     dirperf = np.array([x, y]).reshape(2, -1)
 
-    if plot:  # pragma: no cover
+    if plot:
         import matplotlib.pyplot as plt
         if ax is None:
             fig, ax = plt.subplots()
@@ -1016,9 +1016,17 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         LGS and the directions of reconstruction).
 
     """
-    with fits.open(filename) as hdul:
+    try:
+        if isinstance(filename, fits.HDUList):
+            hdul = filename
+        else:
+            hdul = fits.open(filename)
+
         tbl = Table.read(hdul[extname])
         out = fits.HDUList([fits.PrimaryHDU(), hdul[extname].copy()])
+    finally:
+        if isinstance(filename, str):
+            hdul.close()
 
     if len(tbl) == 1:
         n_jobs = 1
