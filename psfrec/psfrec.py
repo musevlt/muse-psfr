@@ -26,7 +26,7 @@ MAX_L0 = 30  # maximum L0 in m
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
-                  npsflin=1, dim=1280, only_three_lgs=False):
+                  npsflin=1, dim=1280, three_lgs_mode=False):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
 
     Parameters
@@ -75,7 +75,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
     seplgs = 63.       # separation (en rayon) des LGS [arcsec]
     bruitLGS2 = 1.0    # radians de phase bord a bord de sspup @ lambdalgs
 
-    if only_three_lgs:
+    if three_lgs_mode:
         print('Using three lasers mode')
         poslgs = np.array([[1, 1], [-1, -1], [-1, 1]], dtype=float).T
     else:
@@ -928,39 +928,15 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
-    # use the mean value for the 4 LGS for the seeing, GL, and L0
-    values = np.array([[row['LGS%d_%s' % (k, col)]
-                        for col in ('SEEING', 'TUR_GND', 'L0')]
-                       for k in range(1, 5)])
-
-    # check if there are some bad values, apparently the 4th value is
-    # often crap. Check if  GL > MIN_L0 and L0 < MAX_L0
-    check_non_null_laser = ((values[:, 1] > 0) &       # GL > 0
-                            (values[:, 2] < MAX_L0) &  # L0 < MAX_L0
-                            (values[:, 2] > MIN_L0))   # L0 > MIN_L0
-
-    nb_gs = np.sum(check_non_null_laser)
-    irow = row.index + 1
-    nrows = len(row.table)
-
-    if nb_gs == 0:
-        print('{}/{} : No valid values, skipping this row'.format(irow, nrows))
-        if verbose:
-            print('Values:', values)
-        return
-    elif nb_gs < 4:
-        print('{}/{} : Using only {} values out of 4 after outliers rejection'
-              .format(irow, nrows, nb_gs))
-
-    seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
-
+def _process_row(irow, nrows, lgs_idx, seeing, GL, L0, npsflin, h,
+                 lmin, lmax, nl, verbose=False, three_lgs_mode=False):
     print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
           .format(irow, nrows, seeing, GL, L0))
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
-                        npsflin=npsflin, dim=1280, only_three_lgs=(nb_gs < 4))
+                        npsflin=npsflin, dim=1280,
+                        three_lgs_mode=three_lgs_mode)
 
     # et voila la/les PSD.
     # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
@@ -985,12 +961,14 @@ def compute_row(row, npsflin, h, lmin, lmax, nl, verbose=False):
     res['GL'] = GL
     res['L0'] = L0
     res['row_idx'] = irow
+    res['lgs_idx'] = lgs_idx
     return res, psf
 
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, h=(100, 15000),
-                            verbose=False, n_jobs=-1, plot=False):
+                            verbose=False, n_jobs=-1, plot=False,
+                            mean_of_lgs=True):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -1014,6 +992,9 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     plot : bool
         If True, plots the configuration if the AO system (positions of the
         LGS and the directions of reconstruction).
+    mean_of_lgs : bool
+        If True (default), compute the mean seeing, GL and L0 over the
+        4 lasers. Otherwise a PSF is reconstructed for each laser.
 
     """
     try:
@@ -1030,11 +1011,49 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
 
     if len(tbl) == 1:
         n_jobs = 1
+
+    to_compute = []
+    nrows = len(tbl)
     print('Processing SPARTA table with {} values, njobs={} ...'
-          .format(len(tbl), n_jobs))
+          .format(nrows, n_jobs))
+
+    for irow, row in enumerate(tbl, start=1):
+        # use the mean value for the 4 LGS for the seeing, GL, and L0
+        values = np.array([[row['LGS%d_%s' % (k, col)]
+                            for col in ('SEEING', 'TUR_GND', 'L0')]
+                           for k in range(1, 5)])
+
+        # check if there are some bad values, apparently the 4th value is
+        # often crap. Check if  GL > MIN_L0 and L0 < MAX_L0
+        check_non_null_laser = ((values[:, 1] > 0) &       # GL > 0
+                                (values[:, 2] < MAX_L0) &  # L0 < MAX_L0
+                                (values[:, 2] > MIN_L0))   # L0 > MIN_L0
+
+        nb_gs = np.sum(check_non_null_laser)
+        three_lgs_mode = nb_gs < 4
+
+        if nb_gs == 0:
+            print('{}/{} : No valid values, skipping this row'
+                  .format(irow, nrows))
+            if verbose:
+                print('Values:', values)
+            return
+        elif nb_gs < 4:
+            print('{}/{} : Using only {} values out of 4 after outliers '
+                  'rejection'.format(irow, nrows, nb_gs))
+
+        if mean_of_lgs:
+            seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
+            to_compute.append((irow, nrows, -1, seeing, GL, L0, npsflin, h,
+                               lmin, lmax, nl, verbose, three_lgs_mode))
+        else:
+            for i in np.where(check_non_null_laser)[0]:
+                seeing, GL, L0 = values[i]
+                to_compute.append((irow, nrows, i + 1, seeing, GL, L0, npsflin,
+                                   h, lmin, lmax, nl, verbose, three_lgs_mode))
+
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
-        delayed(compute_row)(row, npsflin, h, lmin, lmax, nl, verbose=verbose)
-        for row in tbl)
+        delayed(_process_row)(*args) for args in to_compute)
 
     # filter values that could not be computed
     res = [r for r in res if r is not None]
@@ -1083,9 +1102,8 @@ def create_sparta_table(nlines=1, seeing=1, L0=25, GL=0.7, bad_l0=False,
     GL values.
     """
     # Create a SPARTA table with values for the 4 LGS
-    Cn2 = [GL, 1 - GL]
-    tbl = [('LGS%d_%s' % (k, col), v) for k in range(1, 5)
-           for col, v in (('SEEING', seeing), ('TUR_GND', Cn2[0]), ('L0', L0))]
+    tbl = [('LGS%d_%s' % (k, col), float(v)) for k in range(1, 5)
+           for col, v in (('SEEING', seeing), ('TUR_GND', GL), ('L0', L0))]
     tbl = Table([dict(tbl)] * nlines)
     if bad_l0:
         tbl['LGS4_L0'] = 150

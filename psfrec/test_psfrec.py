@@ -25,6 +25,31 @@ def test_reconstruction(tmpdir):
     assert_allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
 
+def test_reconstruction2(tmpdir):
+    tbl = create_sparta_table()
+    # Modify values for the first LGS
+    tbl.data[0]['LGS1_L0'] = 20
+    tbl.data[0]['LGS1_SEEING'] = 0.8
+    tbl.data[0]['LGS1_TUR_GND'] = 0.5
+    # and give a bad value to the 3rd LGS
+    tbl.data[0]['LGS3_L0'] = 100
+    hdul = fits.HDUList([tbl])
+
+    # Note: the case when npsflin=1 is tested below with test_script
+    res = compute_psf_from_sparta(hdul, npsflin=3, lmin=500, lmax=700,
+                                  nl=3, verbose=True, mean_of_lgs=False)
+    assert len(res) == 5
+    # check that meta are correctly saved
+    fit = Table.read(res['FIT_ROWS'])
+    assert_allclose(fit[fit['lgs_idx'] == 1]['L0'], 20)
+    assert_allclose(fit[fit['lgs_idx'] != 1]['L0'], 25)
+
+    # check fit result
+    assert_allclose(fit['center'], 20)
+    assert_allclose(fit[fit['lbda'] == 500]['fwhm'][:, 0], [0.79, 0.87, 0.87],
+                    atol=1e-2)
+
+
 def test_bad_l0(tmpdir, capsys):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile, bad_l0=True)
