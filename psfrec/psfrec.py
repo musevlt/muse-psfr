@@ -1123,7 +1123,7 @@ def muse_intrinsic_psf(lbda):
     Parameters
     ----------
     lbda : float or array of float
-        wavelength in A.
+        wavelength in nm.
 
     Returns
     -------
@@ -1133,15 +1133,17 @@ def muse_intrinsic_psf(lbda):
     beta_std : float
 
     """
-    pol_beta = [10.1797308, -32.35258942, 38.18625705, -20.24426742,
-                3.91409389, 2.44643245]
-    pol_fwhm = [1.19902075, -3.33403532, 3.7216592, -2.05141069, 0.39250415,
-                0.33318358]
-    fwhm_std = 0.02
-    beta_std = 0.18
+    pol_beta = [-0.83704697, 1.1337153, 0.0609222, -1.35581762,
+                1.15237178, 2.2106042]
+    pol_fwhm = [0.60467385, -1.58905792, 1.75293264, -1.0368302,
+                0.21487023, 0.34851139]
+    pol_beta_std = [0.18187424, -0.17841793, 0.30962616]
+    pol_fwhm_std = [0.00707504, -0.0303464, 0.04596354]
     lb = (10 * lbda - 4750) / (9350 - 4750)
     fwhm = np.polyval(pol_fwhm, lb)
     beta = np.polyval(pol_beta, lb)
+    fwhm_std = np.polyval(pol_fwhm_std, lb)
+    beta_std = np.polyval(pol_beta_std, lb)
     return fwhm, beta, fwhm_std, beta_std
 
 
