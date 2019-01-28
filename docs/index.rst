@@ -158,4 +158,6 @@ API
 
 .. autofunction:: psfrec.compute_psf_from_sparta
 
+.. autofunction:: psfrec.compute_psf
+
 .. autofunction:: psfrec.create_sparta_table

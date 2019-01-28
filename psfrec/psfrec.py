@@ -917,7 +917,7 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     # 2. Convolve with MUSE PSF, Use polynomial approximation
     # -----------------------------------
 
-    fwhm, beta_muse, std_fwhm, std_beta = muse_intrinsic_psf(lbda)
+    fwhm, beta_muse, _, _ = muse_intrinsic_psf(lbda)
     fwhm = fwhm / pixscale
     alpha_muse = fwhm / (2 * np.sqrt(2**(1. / beta_muse) - 1))
     psf_final = np.zeros_like(psf)
@@ -928,10 +928,27 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def _process_row(irow, nrows, lgs_idx, seeing, GL, L0, npsflin, h,
-                 lmin, lmax, nl, verbose=False, three_lgs_mode=False):
-    print('{}/{} : seeing={:.2f} GL={:.2f} L0={:.2f}'
-          .format(irow, nrows, seeing, GL, L0))
+def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 15000), verbose=False,
+                three_lgs_mode=False):
+    """Reconstruct a PSF from a set of seeing, GL, and L0 values.
+
+    Parameters
+    ----------
+    lbda : array
+        Array of wavelength for which the PSF is computed (nm).
+    npsflin : int
+        Number of points where the PSF is reconstructed (on each axis).
+    h : tuple of float
+        Altitude of the ground and high layers (m).
+    verbose : bool
+        Verbose output.
+    three_lgs_mode : bool
+        If True, use only 3 LGS.
+
+    """
+
+    print('Compute PSF with seeing={:.2f} GL={:.2f} L0={:.2f}'
+          .format(seeing, GL, L0))
 
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
@@ -948,7 +965,6 @@ def _process_row(irow, nrows, lgs_idx, seeing, GL, L0, npsflin, h,
         psd = psd[0]
 
     # Passage PSD --> PSF
-    lbda = np.linspace(lmin, lmax, nl)
     psf = psf_muse(psd, lbda, verbose=verbose)
 
     # Convolve with MUSE PSF and Tip-tilt
@@ -960,8 +976,6 @@ def _process_row(irow, nrows, lgs_idx, seeing, GL, L0, npsflin, h,
     res['SEEING'] = seeing
     res['GL'] = GL
     res['L0'] = L0
-    res['row_idx'] = irow
-    res['lgs_idx'] = lgs_idx
     return res, psf
 
 
@@ -1012,8 +1026,10 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     if len(tbl) == 1:
         n_jobs = 1
 
+    laser_idx = []
     to_compute = []
     nrows = len(tbl)
+    lbda = np.linspace(lmin, lmax, nl)
     print('Processing SPARTA table with {} values, njobs={} ...'
           .format(nrows, n_jobs))
 
@@ -1044,27 +1060,27 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
 
         if mean_of_lgs:
             seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
-            to_compute.append((irow, nrows, -1, seeing, GL, L0, npsflin, h,
-                               lmin, lmax, nl, verbose, three_lgs_mode))
+            laser_idx.append(-1)
+            to_compute.append((lbda, seeing, GL, L0, npsflin, h,
+                               verbose, three_lgs_mode))
         else:
             for i in np.where(check_non_null_laser)[0]:
                 seeing, GL, L0 = values[i]
-                to_compute.append((irow, nrows, i + 1, seeing, GL, L0, npsflin,
-                                   h, lmin, lmax, nl, verbose, three_lgs_mode))
+                laser_idx.append(i + 1)
+                to_compute.append((lbda, seeing, GL, L0, npsflin,
+                                   h, verbose, three_lgs_mode))
 
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
-        delayed(_process_row)(*args) for args in to_compute)
-
-    # filter values that could not be computed
-    res = [r for r in res if r is not None]
-    if len(res) == 0:
-        print('File contain not valid values')
-        return
+        delayed(compute_psf)(*args) for args in to_compute)
 
     # get fit table and psf for each row
     tables, psftot = zip(*res)
     stats = [(tbl.meta['SEEING'], tbl.meta['GL'], tbl.meta['L0'])
              for tbl in tables]
+
+    for irow, (tbl, lgs_idx) in enumerate(zip(tables, laser_idx), start=1):
+        tbl['row_idx'] = irow
+        tbl['lgs_idx'] = lgs_idx
 
     # store fit values for all rows in a big table
     tbl = vstack(tables, metadata_conflicts='silent')
