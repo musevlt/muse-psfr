@@ -22,7 +22,7 @@ def test_reconstruction(tmpdir):
     # check fit result
     assert_allclose(fit['center'], 20)
     assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert_allclose(fit[1]['fwhm'], 0.88, atol=1e-2)
+    assert_allclose(fit[1]['fwhm'], 0.85, atol=1e-2)
 
 
 def test_reconstruction2(tmpdir):
@@ -46,7 +46,7 @@ def test_reconstruction2(tmpdir):
 
     # check fit result
     assert_allclose(fit['center'], 20)
-    assert_allclose(fit[fit['lbda'] == 500]['fwhm'][:, 0], [0.81, 0.89, 0.89],
+    assert_allclose(fit[fit['lbda'] == 500]['fwhm'][:, 0], [0.79, 0.86, 0.86],
                     atol=1e-2)
 
 
@@ -70,7 +70,7 @@ def test_bad_l0(tmpdir, capsys):
     # check fit result
     assert_allclose(fit['center'], 20)
     assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
-    assert_allclose(fit[1]['fwhm'], 0.89, atol=1e-2)
+    assert_allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
     # --------
     # Test no valid values
@@ -103,8 +103,8 @@ def test_script(tmpdir):
         'OB None None Airmass 0.00-0.00',
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
-        'FWHM 0.88 0.76 0.65',
-        'BETA 2.48 2.32 2.07',
+        'FWHM 0.85 0.73 0.62',
+        'BETA 2.73 2.55 2.23',
         '--------------------------------------------------------------------'
     ]
 
@@ -126,8 +126,8 @@ def test_script(tmpdir):
     assert lines[2:] == [
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
-        'FWHM 0.88 0.76 0.65',
-        'BETA 2.48 2.32 2.07',
+        'FWHM 0.85 0.73 0.62',
+        'BETA 2.73 2.55 2.23',
         '--------------------------------------------------------------------'
     ]
 

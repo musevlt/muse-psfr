@@ -872,9 +872,9 @@ def fit_psf_cube(lbda, psfcube):
 def convolve_final_psf(lbda, seeing, GL, L0, psf):
     """Convolve with tip-tilt and MUSE PSF to get the final PSF."""
 
-    # 1. Convolve with Tip-tilt, beta=1.5
-    # -----------------------------------
-    beta_tt = 1.5
+    # 1. Convolve with Tip-tilt, beta=2
+    # ---------------------------------
+    beta_tt = 2
 
     seeingHL = seeing * (1 - GL) ** (3. / 5.)
 
@@ -928,7 +928,7 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 15000), verbose=False,
+def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
                 three_lgs_mode=False):
     """Reconstruct a PSF from a set of seeing, GL, and L0 values.
 
@@ -981,7 +981,7 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 15000), verbose=False,
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, lbda=None,
-                            h=(100, 15000), verbose=False, n_jobs=-1,
+                            h=(100, 10000), verbose=False, n_jobs=-1,
                             plot=False, mean_of_lgs=True):
     """Reconstruct a PSF from SPARTA data.
 
