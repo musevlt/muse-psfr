@@ -980,9 +980,9 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 15000), verbose=False,
 
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
-                            lmin=490, lmax=930, nl=35, h=(100, 15000),
-                            verbose=False, n_jobs=-1, plot=False,
-                            mean_of_lgs=True):
+                            lmin=490, lmax=930, nl=35, lbda=None,
+                            h=(100, 15000), verbose=False, n_jobs=-1,
+                            plot=False, mean_of_lgs=True):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -997,6 +997,9 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         Wavelength range (nm).
     nl : int
         Number of wavelength planes to reconstruct.
+    lbda : array
+        Array of wavelength values. If not given it is computed from lmin, lmax
+        and nl.
     h : tuple of float
         Altitude of the ground and high layers (m).
     verbose : bool
@@ -1029,7 +1032,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     laser_idx = []
     to_compute = []
     nrows = len(tbl)
-    lbda = np.linspace(lmin, lmax, nl)
+    if lbda is None:
+        lbda = np.linspace(lmin, lmax, nl)
     print('Processing SPARTA table with {} values, njobs={} ...'
           .format(nrows, n_jobs))
 
@@ -1053,7 +1057,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                   .format(irow, nrows))
             if verbose:
                 print('Values:', values)
-            return
+            continue
         elif nb_gs < 4:
             print('{}/{} : Using only {} values out of 4 after outliers '
                   'rejection'.format(irow, nrows, nb_gs))
@@ -1092,7 +1096,6 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     out.append(hdu)
 
     # compute the mean PSF and store PSF and fit parameters
-    lbda = np.linspace(lmin, lmax, nl)
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
     # and store the mean seeing, gl and L0
