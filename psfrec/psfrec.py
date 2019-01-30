@@ -1074,6 +1074,10 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                 to_compute.append((lbda, seeing, GL, L0, npsflin,
                                    h, verbose, three_lgs_mode))
 
+    if len(to_compute) == 0:
+        print('WARNING: No valid values')
+        return
+
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
         delayed(compute_psf)(*args) for args in to_compute)
 

@@ -79,8 +79,9 @@ def test_bad_l0(tmpdir, capsys):
     res = compute_psf_from_sparta(testfile, verbose=True)
 
     captured = capsys.readouterr()
-    assert ('1/1 : No valid values, skipping this row'
-            in captured.out.splitlines())
+    lines = captured.out.splitlines()
+    assert '1/1 : No valid values, skipping this row' in lines
+    assert 'WARNING: No valid values' in lines
 
 
 def test_script(tmpdir):
