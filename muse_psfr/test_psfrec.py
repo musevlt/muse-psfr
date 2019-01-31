@@ -4,8 +4,8 @@ from astropy.io import fits
 from astropy.table import Table
 from numpy.testing import assert_allclose
 
-from psfrec import compute_psf_from_sparta, plot_psf, create_sparta_table
-from psfrec.run_psfrec import main
+from muse_psfr import compute_psf_from_sparta, plot_psf, create_sparta_table
+from muse_psfr.cli import main
 
 
 def test_reconstruction(tmpdir):
@@ -88,7 +88,7 @@ def test_script(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile)
 
-    logfile = os.path.join(str(tmpdir), 'psfrec.log')
+    logfile = os.path.join(str(tmpdir), 'muse_psfr.log')
     outfile = os.path.join(str(tmpdir), 'out.fits')
     main([testfile, '--no-color', '--logfile', logfile, '--outfile', outfile])
 
@@ -117,7 +117,7 @@ def test_script(tmpdir):
     with pytest.raises(SystemExit, match='No results'):
         main(['--values', '1,0.7,1000'])
 
-    logfile = os.path.join(str(tmpdir), 'psfrec2.log')
+    logfile = os.path.join(str(tmpdir), 'muse-psfr2.log')
     main(['--no-color', '--values', '1,0.7,25', '--logfile', logfile])
 
     with open(logfile) as f:

@@ -1,6 +1,10 @@
 """PSF reconstruction for MUSE WFM.
 
-FIXME: Add Authors, etc.
+Original code was written in IDL by `Thierry Fusco <thierry.fusco@onera.fr>`__
+and `Benoit Neichel <benoit.neichel@lam.fr>`__. It was ported to Python by
+`Simon Conseil <simon.conseil@univ-lyon1.fr>`__.
+
+Note: Many comments are still in french!
 
 Le programme simul_psd_wfm crée un jeu de DSP (par direction du champ).
 

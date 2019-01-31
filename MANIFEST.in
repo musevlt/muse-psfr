@@ -4,6 +4,6 @@ include README.rst
 
 graft docs
 prune docs/_build
-prune psfrec.egg-info
+prune muse_psfr.egg-info
 
 global-exclude *.py[cod] __pycache__ *.so .directory _githash.py .git

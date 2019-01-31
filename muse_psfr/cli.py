@@ -4,7 +4,7 @@ import sys
 from astropy.io import fits
 from mpdaf.tools import deprecated
 
-from psfrec import __version__, compute_psf_from_sparta, create_sparta_table
+from muse_psfr import __version__, compute_psf_from_sparta, create_sparta_table
 
 
 @deprecated('Use compute_psf_from_sparta instead')
@@ -20,12 +20,12 @@ def reconstruct_psf(rawname, **kwargs):
 
 def main(args=None):
     parser = argparse.ArgumentParser(
-        description=f'PSF Reconstruction version {__version__}')
+        description=f'MUSE-PSFR version {__version__}')
     addarg = parser.add_argument
     addarg('raw', help='observation raw file name', nargs='?')
     addarg('--values', help='values of seeing, GL, L0, to use instead of the '
            'raw file, comma-separated')
-    addarg('--logfile', default='psfrec.log', help='Name of log file')
+    addarg('--logfile', default='muse_psfr.log', help='name of log file')
     addarg('-o', '--outfile', help='name of a FITS file in which the results '
            'are saved: table with individual and mean Moffat fits, and mean '
            'reconstructed PSF')
@@ -37,7 +37,7 @@ def main(args=None):
 
     args = parser.parse_args(args)
 
-    print('PSFRec version {}'.format(__version__))
+    print('MUSE-PSFR version {}'.format(__version__))
 
     if args.values:
         values = [float(x) for x in args.values.split(',')]
