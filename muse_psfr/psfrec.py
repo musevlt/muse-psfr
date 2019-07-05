@@ -1069,7 +1069,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
 
         if nb_gs == 0:
             logger.info('%d/%d : No valid values, skipping this row', irow, nrows)
-            logger.debug('Values:', values)
+            logger.debug('Values:', values.tolist())
             continue
         elif nb_gs < 4:
             logger.info('%d/%d : Using only %d values out of 4 after outliers '

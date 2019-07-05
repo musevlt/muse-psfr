@@ -82,7 +82,50 @@ def test_bad_l0_invalid(tmpdir, caplog):
     assert caplog.records[3].message == 'No valid values'
 
 
-def test_script(tmpdir):
+def test_script(tmpdir, caplog):
+    with pytest.raises(SystemExit, match='no input file provided'):
+        main([])
+
+    with pytest.raises(SystemExit, match='--values must contain a list.*'):
+        main(['--values', '0.1,0.2'])
+
+    with pytest.raises(SystemExit, match='No results'):
+        main(['--values', '1,0.7,1000'])
+
+    # without colors, with values and logfile
+    caplog.clear()
+    logfile = os.path.join(str(tmpdir), 'muse-psfr2.log')
+    main(['--no-color', '--values', '1,0.7,25', '--logfile', logfile])
+
+    with open(logfile) as f:
+        lines = f.read().splitlines()
+
+    assert lines[2:] == [
+        '--------------------------------------------------------------------',
+        'LBDA 5000 7000 9000',
+        'FWHM 0.85 0.73 0.62',
+        'BETA 2.73 2.55 2.23',
+        '--------------------------------------------------------------------'
+    ]
+    # sometimes this includes DEBUG logs, sometimes not .... not sure why
+    records = [r for r in caplog.records if r.levelname != 'DEBUG']
+    assert records[5].message == 'LBDA 5000 7000 9000'
+    assert records[6].message == 'FWHM 0.85 0.73 0.62'
+    assert records[7].message == 'BETA 2.73 2.55 2.23'
+
+    # with colors and values
+    caplog.clear()
+    main(['--values', '1,0.7,25'])
+    records = [r for r in caplog.records if r.levelname != 'DEBUG']
+    assert 'LBDA' in records[5].message
+    assert 'FWHM' in records[6].message
+    assert 'BETA' in records[7].message
+    assert '7000' in records[5].message
+    assert '0.73' in records[6].message
+    assert '2.55' in records[7].message
+
+
+def test_script_with_file(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile)
 
@@ -99,29 +142,6 @@ def test_script(tmpdir):
 
     assert lines[2:] == [
         'OB None None Airmass 0.00-0.00',
-        '--------------------------------------------------------------------',
-        'LBDA 5000 7000 9000',
-        'FWHM 0.85 0.73 0.62',
-        'BETA 2.73 2.55 2.23',
-        '--------------------------------------------------------------------'
-    ]
-
-    with pytest.raises(SystemExit, match='no input file provided'):
-        main([])
-
-    with pytest.raises(SystemExit, match='--values must contain a list.*'):
-        main(['--values', '0.1,0.2'])
-
-    with pytest.raises(SystemExit, match='No results'):
-        main(['--values', '1,0.7,1000'])
-
-    logfile = os.path.join(str(tmpdir), 'muse-psfr2.log')
-    main(['--no-color', '--values', '1,0.7,25', '--logfile', logfile])
-
-    with open(logfile) as f:
-        lines = f.read().splitlines()
-
-    assert lines[2:] == [
         '--------------------------------------------------------------------',
         'LBDA 5000 7000 9000',
         'FWHM 0.85 0.73 0.62',
