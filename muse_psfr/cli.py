@@ -37,6 +37,7 @@ def main(args=None):
     addarg('--verbose', '-v', action='store_true', help='verbose flag')
     addarg('--no-color', action='store_true', help='no color in output')
     addarg('--plot', action='store_true', help='plot reconstructed psf')
+    addarg('--version', action='version', version='%(prog)s ' + __version__)
 
     args = parser.parse_args(args)
     logger.info('MUSE-PSFR version %s', __version__)
