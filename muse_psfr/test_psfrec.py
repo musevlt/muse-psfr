@@ -50,7 +50,7 @@ def test_reconstruction2(tmpdir):
                     atol=1e-2)
 
 
-def test_bad_l0(tmpdir, capsys):
+def test_bad_l0(tmpdir, caplog):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile, bad_l0=True)
 
@@ -58,10 +58,9 @@ def test_bad_l0(tmpdir, capsys):
     res = compute_psf_from_sparta(testfile, lmin=490, lmax=541.76, nl=5,
                                   verbose=True)
 
-    captured = capsys.readouterr()
-    assert ('1/1 : Using only 3 values out of 4 after outliers rejection'
-            in captured.out.splitlines())
-    assert 'Using three lasers mode' in captured.out.splitlines()
+    assert (caplog.records[1].message ==
+            '1/1 : Using only 3 values out of 4 after outliers rejection')
+    assert caplog.records[3].message == 'Using three lasers mode'
 
     assert len(res) == 5
     # check that meta are correctly saved
@@ -72,16 +71,15 @@ def test_bad_l0(tmpdir, capsys):
     assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
     assert_allclose(fit[1]['fwhm'], 0.86, atol=1e-2)
 
-    # --------
+
+def test_bad_l0_invalid(tmpdir, caplog):
     # Test no valid values
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile, L0=1000)
-    res = compute_psf_from_sparta(testfile, verbose=True)
+    compute_psf_from_sparta(testfile, verbose=True)
 
-    captured = capsys.readouterr()
-    lines = captured.out.splitlines()
-    assert '1/1 : No valid values, skipping this row' in lines
-    assert 'WARNING: No valid values' in lines
+    assert caplog.records[1].message == '1/1 : No valid values, skipping this row'
+    assert caplog.records[3].message == 'No valid values'
 
 
 def test_script(tmpdir):
