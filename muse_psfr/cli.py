@@ -1,15 +1,18 @@
 import argparse
 import io
 import sys
+import logging
 from astropy.io import fits
 from mpdaf.tools import deprecated
 
 from muse_psfr import __version__, compute_psf_from_sparta, create_sparta_table
 
+logger = logging.getLogger(__name__)
+
 
 @deprecated('Use compute_psf_from_sparta instead')
 def reconstruct_psf(rawname, **kwargs):
-    print('Computing PSF Reconstruction from Sparta data')
+    logger.info('Computing PSF Reconstruction from Sparta data')
     res = compute_psf_from_sparta(rawname, **kwargs)
     if res:
         data = res['FIT_MEAN'].data
@@ -36,8 +39,7 @@ def main(args=None):
     addarg('--plot', action='store_true', help='plot reconstructed psf')
 
     args = parser.parse_args(args)
-
-    print('MUSE-PSFR version {}'.format(__version__))
+    logger.info('MUSE-PSFR version %s', __version__)
 
     if args.values:
         values = [float(x) for x in args.values.split(',')]
@@ -60,9 +62,9 @@ def main(args=None):
             hdr.get('HIERARCH ESO TEL AIRM START', 0),
             hdr.get('HIERARCH ESO TEL AIRM END', 0)
         ))
-        print(header_line)
+        logger.info(header_line)
 
-    print('Computing PSF Reconstruction from Sparta data')
+    logger.info('Computing PSF Reconstruction from Sparta data')
     res = compute_psf_from_sparta(rawf, verbose=args.verbose, lmin=500,
                                   lmax=900, nl=3, n_jobs=args.njobs,
                                   plot=args.plot)
@@ -82,38 +84,42 @@ def main(args=None):
     except ImportError:
         args.no_color = True
 
+    lbda *= 10
     if args.no_color:
-        f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbda * 10))
+        f.write('LBDA %.0f %.0f %.0f\n' % tuple(lbda))
         f.write('FWHM %.2f %.2f %.2f\n' % tuple(fwhm))
         f.write('BETA %.2f %.2f %.2f\n' % tuple(beta))
     else:
         from colorama import Fore, Back, Style
-        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'LBDA ' +
-                Fore.BLUE + ' %.0f' % (lbda[0] * 10) +
-                Fore.GREEN + ' %.0f' % (lbda[1] * 10) +
-                Fore.RED + ' %.0f' % (lbda[2] * 10) + Back.RESET + '\n')
-        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'FWHM ' +
-                Fore.BLUE + ' %.2f' % (fwhm[0]) +
-                Fore.GREEN + ' %.2f' % (fwhm[1]) +
-                Fore.RED + ' %.2f' % (fwhm[2]) + Back.RESET + '\n')
-        f.write(Back.BLACK + Style.BRIGHT + Fore.WHITE + 'BETA ' +
-                Fore.BLUE + ' %.2f' % (beta[0]) +
-                Fore.GREEN + ' %.2f' % (beta[1]) +
-                Fore.RED + ' %.2f' % (beta[2]) + Back.RESET + '\n')
+        RED, GREEN, BLUE = Fore.RED, Fore.GREEN, Fore.BLUE
+        begin_style = Back.BLACK + Style.BRIGHT + Fore.WHITE
+        end_style = Fore.RESET + Style.NORMAL + Back.RESET
+        f.write(
+            f'{begin_style}'
+            f'LBDA {BLUE}{lbda[0]:.0f} {GREEN}{lbda[1]:.0f} {RED}{lbda[2]:.0f}'
+            f'{end_style}\n'
+            f'{begin_style}'
+            f'FWHM {BLUE}{fwhm[0]:.2f} {GREEN}{fwhm[1]:.2f} {RED}{fwhm[2]:.2f}'
+            f'{end_style}\n'
+            f'{begin_style}'
+            f'BETA {BLUE}{beta[0]:.2f} {GREEN}{beta[1]:.2f} {RED}{beta[2]:.2f}'
+            f'{end_style}\n'
+        )
         f.write(Style.RESET_ALL)
 
     f.write('-' * 68 + '\n')
 
     f.seek(0)
-    print('\n' + f.read())
+    for line in f:
+        logger.info(line.rstrip('\n'))
 
     if args.logfile is not None:
         f.seek(0)
         with open(args.logfile, 'a') as fd:
             fd.write('\nFile: {}\n'.format(args.raw))
             fd.write(f.read())
-        print('Results saved to %s' % args.logfile)
+        logger.info('Results saved to %s' % args.logfile)
 
     if args.outfile is not None:
         res.writeto(args.outfile, overwrite=True)
-        print('FITS file saved to %s' % args.outfile)
+        logger.info('FITS file saved to %s' % args.outfile)

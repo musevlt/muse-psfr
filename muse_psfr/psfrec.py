@@ -13,24 +13,38 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 """
 
-import numpy as np
+import logging
 import os
+import sys
+from math import gamma
+
+import numpy as np
 from astropy.convolution import Moffat2DKernel
 from astropy.io import fits
-from astropy.table import Table, Column, vstack
+from astropy.table import Column, Table, vstack
 from joblib import Parallel, delayed
-from math import gamma
+from mpdaf.log import setup_logging
 from mpdaf.obj import Cube
-from numpy.fft import fft2, ifft2, fftshift
+from numpy.fft import fft2, fftshift, ifft2
 from scipy.interpolate import interpn
 from scipy.signal import fftconvolve
 
 MIN_L0 = 8   # minimum L0 in m
 MAX_L0 = 30  # maximum L0 in m
 
+setup_logging('muse_psfr', fmt='[%(levelname)s] %(message)s', level='INFO',
+              color=True, stream=sys.stdout)
+logger = logging.getLogger(__name__)
 
-def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
-                  npsflin=1, dim=1280, three_lgs_mode=False):
+
+def set_logger_level(level):
+    logger = logging.getLogger('muse_psfr')
+    logger.setLevel(level)
+    logger.handlers[0].setLevel(level)
+
+
+def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, npsflin=1,
+                  dim=1280, three_lgs_mode=False):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
 
     Parameters
@@ -80,7 +94,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
     bruitLGS2 = 1.0    # radians de phase bord a bord de sspup @ lambdalgs
 
     if three_lgs_mode:
-        print('Using three lasers mode')
+        logger.info('Using three lasers mode')
         poslgs = np.array([[1, 1], [-1, -1], [-1, 1]], dtype=float).T
     else:
         poslgs = np.array([[1, 1], [-1, -1], [-1, 1], [1, -1]], dtype=float).T
@@ -108,16 +122,15 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
 
     # Step 0.6 : Summarize of parameters
     # ---------
-    if verbose:
-        print('r0 0.5um (zenith)        = ', seeing2r01(seeing, lambdaref, 0))
-        print('r0 0.5um (line of sight) = ', r0ref)
-        print('Seeing   (line of sight) = ', 0.987 * 0.5 / r0ref / 4.85)
-        print('hbarre   (zenith)        = ',
-              np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
-        print('hbarre   (line of sight) = ',
-              np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
-        print('vbarre                   = ',
-              np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
+    logger.debug('r0 0.5um (zenith)        = %.2f', seeing2r01(seeing, lambdaref, 0))
+    logger.debug('r0 0.5um (line of sight) = %.2f', r0ref)
+    logger.debug('Seeing   (line of sight) = %.2f', 0.987 * 0.5 / r0ref / 4.85)
+    logger.debug('hbarre   (zenith)        = %.2f',
+                 np.sum(h ** (5 / 3) * Cn2) ** (3 / 5))
+    logger.debug('hbarre   (line of sight) = %.2f',
+                 np.sum(hz ** (5 / 3) * Cn2) ** (3 / 5))
+    logger.debug('vbarre                   = %.2f',
+                 np.sum(vent ** (5 / 3) * Cn2) ** (3 / 5))
 
     # ========================================================================
 
@@ -133,7 +146,7 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, verbose=False,
     # cube de DSP pour chaque direction d'interet - ZONE DE CORRECTION ONLY
     dsp = dsp4muse(Dpup, Dimpup, Dimpup * 2, Cn2, h, L0, r0ref, recons_cn2,
                    recons_h, vent, arg_v, law, nsspup, nact, Fsamp, delay,
-                   bruitLGS2, lambdaref, poslgs, dirperf, verbose=verbose)
+                   bruitLGS2, lambdaref, poslgs, dirperf)
 
     # STEP 2: Calcul DSP fitting
     # ===============================================
@@ -408,7 +421,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
     # 4. Le fitting
 
     if tempo:
-        # print('Servo-lag Error')
+        # logger.info('Servo-lag Error')
         pass
     else:
         wind = np.zeros((2, nb_h_vrai))
@@ -528,7 +541,7 @@ def calc_dsp_res_glao_finale(f, arg_f, pitchs_wfs, poslgs, beta, sigv,
 
 def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
              vent, arg_v, law, nsspup, nact, Fsamp, delay, bruitLGS2,
-             lambdaref, poslgs, dirperf, verbose=False):
+             lambdaref, poslgs, dirperf):
 
     # Passage en arcmin
     poslgs1 = poslgs / 60
@@ -602,9 +615,9 @@ def dsp4muse(Dpup, pupdim, dimall, Cn2, hh, L0, r0ref, recons_cn2, h_recons,
             hh, h_dm, Wmap, td, ti, wind, tempo=tempo, fitting=fitting)
         dsp[bbb, :, :] = dsp_res
 
-        if verbose:
-            resval = calc_var_from_psd(dsp_res, pixsize, Dpup)
-            print(bbb, np.sqrt(resval) * lambdaref * 1e3 / (2 * np.pi))
+        resval = calc_var_from_psd(dsp_res, pixsize, Dpup)
+        logger.debug("dirperf=%d, %.2f", bbb,
+                     np.sqrt(resval) * lambdaref * 1e3 / (2 * np.pi))
 
     # The above was ported from IDL with inverse rows/columns convention, so we
     # transpose the array here.
@@ -639,7 +652,7 @@ def interpolate(arr, xout, method='linear'):
     return interpn((xin, xin), arr, xout.T, method='linear').T
 
 
-def psf_muse(psd, lambdamuse, verbose=False):
+def psf_muse(psd, lambdamuse):
     if psd.ndim == 2:
         ndir = 1
         dim = psd.shape[0]
@@ -666,14 +679,12 @@ def psf_muse(psd, lambdamuse, verbose=False):
         if psd.ndim == 3:
             psf = np.zeros((ndir, npixc[i], npixc[i]))
             for j in range(ndir):
-                psf_tmp = psd_to_psf(psd[j], pup, D, lbda[i], samp=samp,
-                                     FoV=FoV[i], verbose=verbose)
+                psf_tmp = psd_to_psf(psd[j], pup, D, lbda[i], samp=samp, FoV=FoV[i])
                 psf[j] = crop(psf_tmp, center=psf_tmp.shape[1] // 2,
                               size=npixc[i] // 2)
             psf = psf.mean(axis=0)
         else:
-            psf = psd_to_psf(psd, pup, D, lbda[i], samp=samp, FoV=FoV[i],
-                             verbose=verbose)
+            psf = psd_to_psf(psd, pup, D, lbda[i], samp=samp, FoV=FoV[i])
             psf = crop(psf, center=psf.shape[0] // 2, size=npixc[i] // 2)
 
         psf /= psf.sum()
@@ -687,7 +698,7 @@ def psf_muse(psd, lambdamuse, verbose=False):
 
 
 def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
-               return_all=False, verbose=False):
+               return_all=False):
     """Computation of a PSF from a residual phase PSD and a pupil shape.
 
     Programme pour prendre en compte la multi-analyse les geometries
@@ -710,8 +721,8 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     L = D * sampnum       # Physical size of the PSD
 
     if dim < 2 * npup:
-        print("the PSD horizon must be at least two time larger than the "
-              "pupil diameter")
+        logger.info("the PSD horizon must be at least two time larger than "
+                    "the pupil diameter")
 
     # from PSD to structure function
     convnm = 2 * np.pi / (lbda * 1e9)  # nm to rad
@@ -724,7 +735,7 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     # Extraction of the pupil part of the structure function
     sampin = samp if samp is not None else sampnum
     if samp < 2:
-        print('PSF should be at least nyquist sampled')
+        logger.info('PSF should be at least nyquist sampled')
 
     # even dimension of the num psd
     dimnum = int(np.fix(dim * (sampin / sampnum) / 2)) * 2
@@ -740,12 +751,11 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
             Dphi[0, dim - 1] + Dphi[dim - 1, 0]) / 4
         sl = slice(int(dimnum / 2 - dim / 2), int(dimnum / 2 + dim / 2))
         Dphi2[sl, sl] = Dphi
-        print('WARNING : Samplig > Dim DSP / Dim pup => extrapolation !!! '
-              'We recommmend to increase the PSD size')
+        logger.warning('Sampling > Dim DSP / Dim pup => extrapolation !!! '
+                       'We recommmend to increase the PSD size')
 
-    # if verbose:
-    #     print('input sampling: {}, output sampling: {}, max num sampling: {}'
-    #           .format(sampin, sampout, sampnum))
+    logger.debug('input sampling: %.2f, output sampling: %.2f, max num sampling: %.2f',
+                 sampin, sampout, sampnum)
 
     # increasing the FoV PSF means oversampling the pupil
     FoVnum = (lbda / (sampnum * D)) * dim / (4.85 * 1.e-6)
@@ -769,18 +779,17 @@ def psd_to_psf(psd, pup, D, lbda, phase_static=None, samp=None, FoV=None,
     if phase_static is not None:
         npups = phase_static.shape[0]
         if npups != npup:
-            print("pup and static phase must have the same number of pixels")
+            logger.info("pup and static phase must have the same number of pixels")
         if not np.allclose(FoV, FoVnum):
             phase_static = np.maximum(
                 interpolate(phase_static, xxpupover, method='cubic'), 0)
 
-    # if verbose:
-    #     print('input FoV: {:.2f}, output FoV: {:.2f}, Num FoV: {:.2f}'
-    #           .format(FoV, FoVnum * dimover / dimnum, FoVnum))
+    logger.debug('input FoV: %.2f, output FoV: %.2f, Num FoV: %.2f',
+                 FoV, FoVnum * dimover / dimnum, FoVnum)
 
     if FoV > 2 * FoVnum:
-        print('Warning : Potential alisiang issue .. I recommend to create '
-              'initial PSD and pupil with a larger numbert of pixel')
+        logger.warning(': Potential alisiang issue .. I recommend to create '
+                       'initial PSD and pupil with a larger numbert of pixel')
 
     # creation of a diff limited OTF (pupil autocorrelation)
     tab = np.zeros((dimover, dimover), dtype=complex)
@@ -950,14 +959,13 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
         If True, use only 3 LGS.
 
     """
+    if verbose:
+        set_logger_level('DEBUG')
 
-    print('Compute PSF with seeing={:.2f} GL={:.2f} L0={:.2f}'
-          .format(seeing, GL, L0))
-
+    logger.info('Compute PSF with seeing=%.2f GL=%.2f L0=%.2f', seeing, GL, L0)
     Cn2 = [GL, 1 - GL]
-    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., verbose=verbose,
-                        npsflin=npsflin, dim=1280,
-                        three_lgs_mode=three_lgs_mode)
+    psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., npsflin=npsflin,
+                        dim=1280, three_lgs_mode=three_lgs_mode)
 
     # et voila la/les PSD.
     # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
@@ -969,7 +977,7 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
         psd = psd[0]
 
     # Passage PSD --> PSF
-    psf = psf_muse(psd, lbda, verbose=verbose)
+    psf = psf_muse(psd, lbda)
 
     # Convolve with MUSE PSF and Tip-tilt
     psf = convolve_final_psf(lbda, seeing, GL, L0, psf)
@@ -1018,6 +1026,9 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         4 lasers. Otherwise a PSF is reconstructed for each laser.
 
     """
+    if verbose:
+        set_logger_level('DEBUG')
+
     try:
         if isinstance(filename, fits.HDUList):
             hdul = filename
@@ -1038,8 +1049,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     nrows = len(tbl)
     if lbda is None:
         lbda = np.linspace(lmin, lmax, nl)
-    print('Processing SPARTA table with {} values, njobs={} ...'
-          .format(nrows, n_jobs))
+
+    logger.info('Processing SPARTA table with %d values, njobs=%d ...', nrows, n_jobs)
 
     for irow, row in enumerate(tbl, start=1):
         # use the mean value for the 4 LGS for the seeing, GL, and L0
@@ -1057,14 +1068,12 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         three_lgs_mode = nb_gs < 4
 
         if nb_gs == 0:
-            print('{}/{} : No valid values, skipping this row'
-                  .format(irow, nrows))
-            if verbose:
-                print('Values:', values)
+            logger.info('%d/%d : No valid values, skipping this row', irow, nrows)
+            logger.debug('Values:', values)
             continue
         elif nb_gs < 4:
-            print('{}/{} : Using only {} values out of 4 after outliers '
-                  'rejection'.format(irow, nrows, nb_gs))
+            logger.info('%d/%d : Using only %d values out of 4 after outliers '
+                        'rejection', irow, nrows, nb_gs)
 
         if mean_of_lgs:
             seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
@@ -1079,7 +1088,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                                    h, verbose, three_lgs_mode))
 
     if len(to_compute) == 0:
-        print('WARNING: No valid values')
+        logger.warning('No valid values')
         return
 
     res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
