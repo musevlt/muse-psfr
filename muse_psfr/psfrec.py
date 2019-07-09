@@ -33,12 +33,6 @@ MAX_L0 = 30  # maximum L0 in m
 logger = logging.getLogger(__name__)
 
 
-def set_logger_level(level):
-    logger = logging.getLogger('muse_psfr')
-    logger.setLevel(level)
-    logger.handlers[0].setLevel(level)
-
-
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, npsflin=1,
                   dim=1280, three_lgs_mode=False):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
@@ -937,8 +931,7 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
-                three_lgs_mode=False):
+def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), three_lgs_mode=False):
     """Reconstruct a PSF from a set of seeing, GL, and L0 values.
 
     Parameters
@@ -949,15 +942,10 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
         Number of points where the PSF is reconstructed (on each axis).
     h : tuple of float
         Altitude of the ground and high layers (m).
-    verbose : bool
-        Verbose output.
     three_lgs_mode : bool
         If True, use only 3 LGS.
 
     """
-    if verbose:
-        set_logger_level('DEBUG')
-
     logger.info('Compute PSF with seeing=%.2f GL=%.2f L0=%.2f', seeing, GL, L0)
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., npsflin=npsflin,
@@ -989,8 +977,7 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), verbose=False,
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, lbda=None,
-                            h=(100, 10000), verbose=False, n_jobs=-1,
-                            plot=False, mean_of_lgs=True):
+                            h=(100, 10000), n_jobs=-1, plot=False, mean_of_lgs=True):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -1010,8 +997,6 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         and nl.
     h : tuple of float
         Altitude of the ground and high layers (m).
-    verbose : bool
-        Verbose output.
     n_jobs : int
         Number of parallel processes to process the rows of the SPARTA table.
     plot : bool
@@ -1022,9 +1007,6 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         4 lasers. Otherwise a PSF is reconstructed for each laser.
 
     """
-    if verbose:
-        set_logger_level('DEBUG')
-
     try:
         if isinstance(filename, fits.HDUList):
             hdul = filename
@@ -1074,20 +1056,18 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         if mean_of_lgs:
             seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
             laser_idx.append(-1)
-            to_compute.append((lbda, seeing, GL, L0, npsflin, h,
-                               verbose, three_lgs_mode))
+            to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode))
         else:
             for i in np.where(check_non_null_laser)[0]:
                 seeing, GL, L0 = values[i]
                 laser_idx.append(i + 1)
-                to_compute.append((lbda, seeing, GL, L0, npsflin,
-                                   h, verbose, three_lgs_mode))
+                to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode))
 
     if len(to_compute) == 0:
         logger.warning('No valid values')
         return
 
-    res = Parallel(n_jobs=n_jobs, verbose=50 if verbose else 0)(
+    res = Parallel(n_jobs=n_jobs)(
         delayed(compute_psf)(*args) for args in to_compute)
 
     # get fit table and psf for each row

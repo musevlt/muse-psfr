@@ -66,9 +66,13 @@ def main(args=None):
         logger.info(header_line)
 
     logger.info('Computing PSF Reconstruction from Sparta data')
-    res = compute_psf_from_sparta(rawf, verbose=args.verbose, lmin=500,
-                                  lmax=900, nl=3, n_jobs=args.njobs,
-                                  plot=args.plot)
+    if args.verbose:
+        _logger = logging.getLogger('muse_psfr')
+        _logger.setLevel("DEBUG")
+        _logger.handlers[0].setLevel("DEBUG")
+
+    res = compute_psf_from_sparta(rawf, lmin=500, lmax=900, nl=3,
+                                  n_jobs=args.njobs, plot=args.plot)
     if res:
         data = res['FIT_MEAN'].data
         lbda, fwhm, beta = data['lbda'], data['fwhm'][:, 0], data['n']

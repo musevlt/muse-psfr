@@ -13,8 +13,7 @@ def test_reconstruction(tmpdir):
     hdul = fits.HDUList([tbl])
 
     # Note: the case when npsflin=1 is tested below with test_script
-    res = compute_psf_from_sparta(hdul, npsflin=3, lmin=490, lmax=541.76,
-                                  nl=5, verbose=True)
+    res = compute_psf_from_sparta(hdul, npsflin=3, lmin=490, lmax=541.76, nl=5)
     assert len(res) == 5
     # check that meta are correctly saved
     fit = Table.read(res['FIT_ROWS'])
@@ -37,7 +36,7 @@ def test_reconstruction2(tmpdir):
 
     # Note: the case when npsflin=1 is tested below with test_script
     res = compute_psf_from_sparta(hdul, npsflin=3, lmin=500, lmax=700,
-                                  nl=3, verbose=True, mean_of_lgs=False)
+                                  nl=3, mean_of_lgs=False)
     assert len(res) == 5
     # check that meta are correctly saved
     fit = Table.read(res['FIT_ROWS'])
@@ -55,8 +54,7 @@ def test_bad_l0(tmpdir, caplog):
     create_sparta_table(outfile=testfile, bad_l0=True)
 
     # Note: the case when npsflin=1 is tested below with test_script
-    res = compute_psf_from_sparta(testfile, lmin=490, lmax=541.76, nl=5,
-                                  verbose=True)
+    res = compute_psf_from_sparta(testfile, lmin=490, lmax=541.76, nl=5)
 
     assert (caplog.records[1].message ==
             '1/1 : Using only 3 values out of 4 after outliers rejection')
@@ -76,10 +74,10 @@ def test_bad_l0_invalid(tmpdir, caplog):
     # Test no valid values
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile, L0=1000)
-    compute_psf_from_sparta(testfile, verbose=True)
+    compute_psf_from_sparta(testfile)
 
     assert caplog.records[1].message == '1/1 : No valid values, skipping this row'
-    assert caplog.records[3].message == 'No valid values'
+    assert caplog.records[2].message == 'No valid values'
 
 
 def test_script(tmpdir, caplog):
@@ -157,7 +155,7 @@ def test_plot(tmpdir):
     testfile = os.path.join(str(tmpdir), 'sparta.fits')
     create_sparta_table(outfile=testfile, nlines=2)
 
-    res = compute_psf_from_sparta(testfile, verbose=True)
+    res = compute_psf_from_sparta(testfile)
     outfile = os.path.join(str(tmpdir), 'fitres.fits')
     res.writeto(outfile, overwrite=True)
 
