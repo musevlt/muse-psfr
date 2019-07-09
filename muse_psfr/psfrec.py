@@ -15,7 +15,6 @@ d'onde avec un pixel scale de 0.2 arcsec.
 
 import logging
 import os
-import sys
 from math import gamma
 
 import numpy as np
@@ -23,7 +22,6 @@ from astropy.convolution import Moffat2DKernel
 from astropy.io import fits
 from astropy.table import Column, Table, vstack
 from joblib import Parallel, delayed
-from mpdaf.log import setup_logging
 from mpdaf.obj import Cube
 from numpy.fft import fft2, fftshift, ifft2
 from scipy.interpolate import interpn
@@ -32,8 +30,6 @@ from scipy.signal import fftconvolve
 MIN_L0 = 8   # minimum L0 in m
 MAX_L0 = 30  # maximum L0 in m
 
-setup_logging('muse_psfr', fmt='[%(levelname)s] %(message)s', level='INFO',
-              color=True, stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
 
