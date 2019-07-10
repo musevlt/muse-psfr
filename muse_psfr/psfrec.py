@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, npsflin=1,
-                  dim=1280, three_lgs_mode=False):
+                  dim=1280, three_lgs_mode=False, verbose=True):
     """ Batch de simulation de PSF WFM MUSE avec impact de NGS.
 
     Parameters
@@ -84,7 +84,8 @@ def simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., plot=False, npsflin=1,
     bruitLGS2 = 1.0    # radians de phase bord a bord de sspup @ lambdalgs
 
     if three_lgs_mode:
-        logger.info('Using three lasers mode')
+        if verbose:
+            logger.info('Using three lasers mode')
         poslgs = np.array([[1, 1], [-1, -1], [-1, 1]], dtype=float).T
     else:
         poslgs = np.array([[1, 1], [-1, -1], [-1, 1], [1, -1]], dtype=float).T
@@ -931,7 +932,8 @@ def convolve_final_psf(lbda, seeing, GL, L0, psf):
     return psf_final
 
 
-def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), three_lgs_mode=False):
+def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), three_lgs_mode=False,
+                verbose=True):
     """Reconstruct a PSF from a set of seeing, GL, and L0 values.
 
     Parameters
@@ -944,12 +946,15 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), three_lgs_mode=
         Altitude of the ground and high layers (m).
     three_lgs_mode : bool
         If True, use only 3 LGS.
+    verbose : bool
+        If True (default) log informations
 
     """
-    logger.info('Compute PSF with seeing=%.2f GL=%.2f L0=%.2f', seeing, GL, L0)
+    if verbose:
+        logger.info('Compute PSF with seeing=%.2f GL=%.2f L0=%.2f', seeing, GL, L0)
     Cn2 = [GL, 1 - GL]
     psd = simul_psd_wfm(Cn2, h, seeing, L0, zenith=0., npsflin=npsflin,
-                        dim=1280, three_lgs_mode=three_lgs_mode)
+                        dim=1280, three_lgs_mode=three_lgs_mode, verbose=verbose)
 
     # et voila la/les PSD.
     # Pour aller plus vite, on pourrait moyennee les PSD .. c'est presque
@@ -977,7 +982,8 @@ def compute_psf(lbda, seeing, GL, L0, npsflin=1, h=(100, 10000), three_lgs_mode=
 
 def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
                             lmin=490, lmax=930, nl=35, lbda=None,
-                            h=(100, 10000), n_jobs=-1, plot=False, mean_of_lgs=True):
+                            h=(100, 10000), n_jobs=-1, plot=False, mean_of_lgs=True,
+                            verbose=True):
     """Reconstruct a PSF from SPARTA data.
 
     Parameters
@@ -1005,6 +1011,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     mean_of_lgs : bool
         If True (default), compute the mean seeing, GL and L0 over the
         4 lasers. Otherwise a PSF is reconstructed for each laser.
+    verbose : bool
+        If True (default), log informations
 
     """
     try:
@@ -1028,7 +1036,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     if lbda is None:
         lbda = np.linspace(lmin, lmax, nl)
 
-    logger.info('Processing SPARTA table with %d values, njobs=%d ...', nrows, n_jobs)
+    if verbose:
+        logger.info('Processing SPARTA table with %d values, njobs=%d ...', nrows, n_jobs)
 
     for irow, row in enumerate(tbl, start=1):
         # use the mean value for the 4 LGS for the seeing, GL, and L0
@@ -1046,22 +1055,24 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         three_lgs_mode = nb_gs < 4
 
         if nb_gs == 0:
-            logger.info('%d/%d : No valid values, skipping this row', irow, nrows)
-            logger.debug('Values:', values.tolist())
+            if verbose:     
+                logger.info('%d/%d : No valid values, skipping this row', irow, nrows)
+                logger.debug('Values:', values.tolist())
             continue
         elif nb_gs < 4:
-            logger.info('%d/%d : Using only %d values out of 4 after outliers '
-                        'rejection', irow, nrows, nb_gs)
+            if verbose:                
+                logger.info('%d/%d : Using only %d values out of 4 after outliers '
+                            'rejection', irow, nrows, nb_gs)
 
         if mean_of_lgs:
             seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
             laser_idx.append(-1)
-            to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode))
+            to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode, verbose))
         else:
             for i in np.where(check_non_null_laser)[0]:
                 seeing, GL, L0 = values[i]
                 laser_idx.append(i + 1)
-                to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode))
+                to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode, verbose))
 
     if len(to_compute) == 0:
         logger.warning('No valid values')
