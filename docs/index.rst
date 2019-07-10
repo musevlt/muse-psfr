@@ -1,17 +1,17 @@
 MUSE-PSFR - PSF reconstruction for MUSE WFM-AO
 ==============================================
 
-The MUSE-PSFR code allows to reconstruct a PSF for the `MUSE WFM-AO
-<https://www.eso.org/sci/facilities/paranal/instruments/muse/inst.html>`_ mode,
-using telemetry data from `SPARTA
-<https://www.eso.org/sci/facilities/develop/ao/tecno/sparta.html>`_.
+.. ifconfig:: 'dev' in release
+
+    .. warning::
+
+        This documentation is for the version currently under development.
+
+.. include:: ../README.rst
 
 Original code was written in IDL by `Thierry Fusco <thierry.fusco@onera.fr>`__
 and `Benoit Neichel <benoit.neichel@lam.fr>`__. It was ported to Python by
 `Simon Conseil <simon.conseil@univ-lyon1.fr>`__.
-
-The paper describing the original method can be found here:
-http://adsabs.harvard.edu/abs/XXXXXXXXX (TODO)
 
 .. contents::
 
