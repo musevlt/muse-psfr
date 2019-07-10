@@ -1,4 +1,10 @@
-1.0.dev
+1.0.rc2
+-------
+
+- Add ``--version`` for the script.
+- Use logging for all terminal outputs.
+
+1.0.rc1
 -------
 
 - Skip sparta row when L0<10 or L0>30.

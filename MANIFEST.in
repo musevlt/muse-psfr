@@ -6,4 +6,4 @@ graft docs
 prune docs/_build
 prune muse_psfr.egg-info
 
-global-exclude *.py[cod] __pycache__ *.so .directory _githash.py .git
+global-exclude *.py[cod] __pycache__ *.so .directory .git
