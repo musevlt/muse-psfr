@@ -1,10 +1,16 @@
 import os
+
 import pytest
 from astropy.io import fits
 from astropy.table import Table
 from numpy.testing import assert_allclose
 
-from muse_psfr import compute_psf_from_sparta, plot_psf, create_sparta_table
+from muse_psfr import (
+    compute_psf_from_sparta,
+    create_sparta_table,
+    fit_psf_with_polynom,
+    plot_psf,
+)
 from muse_psfr.cli import main
 
 
@@ -22,6 +28,20 @@ def test_reconstruction(tmpdir):
     assert_allclose(fit['center'], 20)
     assert_allclose(fit[1]['lbda'], 502.9, atol=1e-1)
     assert_allclose(fit[1]['fwhm'], 0.85, atol=1e-2)
+
+
+def test_fit_poly(tmpdir):
+    tbl = create_sparta_table()
+    hdul = fits.HDUList([tbl])
+    res = compute_psf_from_sparta(hdul, lmin=500, lmax=900, nl=9)
+    fit = Table.read(res['FIT_ROWS'])
+    res = fit_psf_with_polynom(fit['lbda'], fit['fwhm'][:, 0], fit['n'],
+                               deg=(5, 5), output=1)
+    assert_allclose(res['fwhm_pol'][0], 0.65, atol=1e-2)
+    assert_allclose(res['beta_pol'][0], 0.78, atol=1e-2)
+    # fit[1] at 550nm matches roughly res[8] (550.1)
+    assert_allclose(res['beta_fit'][8], fit[1]['n'], atol=1e-2)
+    assert_allclose(res['fwhm_fit'][8], fit[1]['fwhm'], atol=1e-2)
 
 
 def test_reconstruction2(tmpdir):

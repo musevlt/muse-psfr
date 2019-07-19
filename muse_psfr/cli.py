@@ -1,7 +1,8 @@
 import argparse
 import io
-import sys
 import logging
+import sys
+
 from astropy.io import fits
 
 from muse_psfr import __version__, compute_psf_from_sparta, create_sparta_table
