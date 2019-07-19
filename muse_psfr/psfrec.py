@@ -1174,15 +1174,15 @@ def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5, 5), output=0):
     Parameters
     ----------
     lbda : array of float
-        wavelength in nm.
+        Wavelength in nm.
     fwhm: array of float
-        Moffat FWHM in arcsec
+        Moffat FWHM in arcsec.
     beta: array of float
-        Moffat beta parameter
+        Moffat beta parameter.
     deg: tuple
-        (fwhm_deg, beta_deg), polynomial degre in fwhm and beta
+        (fwhm_deg, beta_deg), polynomial degre in fwhm and beta.
     output: int
-         if set to 1, the fitted values are returned
+         If set to 1, the fitted values are returned.
 
     Returns
     -------
