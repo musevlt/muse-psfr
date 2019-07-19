@@ -50,9 +50,9 @@ Inputs
 ------
 
 The PSF reconstruction algorithm needs 3 values provided by SPARTA: the
-*seeing*, the *Ground Layer fraction (GL)*, and *L0*. These values can be
-provided directly as command-line arguments (see below), but the typical use is
-to provide a raw MUSE file.
+*seeing*, the *Ground Layer fraction (GL)*, and the *outer-scale (L0)*. These
+values can be provided directly as command-line arguments (see below), but the
+typical use is to provide a raw MUSE file.
 
 Since the GLAO commissioning, the MUSE raw files contain a FITS table
 (``SPARTA_ATM_DATA``) containing the atmospheric turbulence profile estimated
@@ -63,7 +63,7 @@ Number of reconstructed wavelengths
 -----------------------------------
 
 To reduce computation time, the ``muse-psfr`` command reconstructs the PSF at
-three wavelengths: 500nm, 700nm, and 900nm. But it is possible to reconstruct
+three wavelengths: 500, 700, and 900 nm. But it is possible to reconstruct
 the PSF at any wavelength, with the `~muse_psfr.compute_psf_from_sparta`
 function.  This function reconstructs by default for 35 wavelengths between
 490nm and 930nm (which can specified with the *lmin*, *lmax*, and *nl*
@@ -90,9 +90,9 @@ Command Line Interface
 MUSE-PSFR can be used from the command line, either with a set of seeing, GL,
 and L0 values:
 
-.. command-output:: muse-psfr --values 1,0.7,25
+.. command-output:: muse-psfr --no-color --values 1,0.7,25
 
-Or with a MUSE raw FITS file, that contains a ``SPARTA_ATM_DATA`` extension::
+Or with a MUSE raw FITS file which contains a ``SPARTA_ATM_DATA`` extension::
 
    $ muse-psfr raw/MUSE.2018-08-13T07:14:11.128.fits.fz
    MUSE-PSFR version 0.31
@@ -162,3 +162,5 @@ API
 .. autofunction:: muse_psfr.compute_psf
 
 .. autofunction:: muse_psfr.create_sparta_table
+
+.. autofunction:: muse_psfr.fit_psf_with_polynom

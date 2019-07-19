@@ -1169,7 +1169,7 @@ def muse_intrinsic_psf(lbda):
 
 
 def fit_psf_with_polynom(lbda, fwhm, beta, deg=(5, 5), output=0):
-    """Fit MUSE PSF fwhm and beta with polynoms
+    """Fit MUSE PSF fwhm and beta with polynoms.
 
     Parameters
     ----------
