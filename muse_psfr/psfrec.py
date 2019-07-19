@@ -176,8 +176,6 @@ def direction_perf(npts, field_size=60, plot=False, lgs=None, ngs=None,
         ax.set_xlabel('arcsecond')
         ax.set_ylabel('arcsecond')
         ax.legend(loc='upper center')
-        if ax is None:
-            plt.show()
 
     return dirperf
 
@@ -1055,12 +1053,12 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         three_lgs_mode = nb_gs < 4
 
         if nb_gs == 0:
-            if verbose:     
+            if verbose:
                 logger.info('%d/%d : No valid values, skipping this row', irow, nrows)
                 logger.debug('Values:', values.tolist())
             continue
         elif nb_gs < 4:
-            if verbose:                
+            if verbose:
                 logger.info('%d/%d : Using only %d values out of 4 after outliers '
                             'rejection', irow, nrows, nb_gs)
 

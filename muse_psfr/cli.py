@@ -3,22 +3,10 @@ import io
 import sys
 import logging
 from astropy.io import fits
-from mpdaf.tools import deprecated
 
 from muse_psfr import __version__, compute_psf_from_sparta, create_sparta_table
 
 logger = logging.getLogger(__name__)
-
-
-@deprecated('Use compute_psf_from_sparta instead')
-def reconstruct_psf(rawname, **kwargs):
-    logger.info('Computing PSF Reconstruction from Sparta data')
-    res = compute_psf_from_sparta(rawname, **kwargs)
-    if res:
-        data = res['FIT_MEAN'].data
-        return data['lbda'], data['fwhm'][:, 0], data['n']
-    else:
-        return None
 
 
 def main(args=None):
