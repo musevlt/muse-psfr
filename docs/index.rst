@@ -43,8 +43,7 @@ Or into the user path with::
 How it works
 ============
 
-Brief description, TODO.
-
+The algorithm is described in the article ([Fusco et al. in prep.]).
 
 Inputs
 ------
@@ -76,10 +75,6 @@ Since the spatial variation is negligible over the MUSE field of view, the
 reconstruction is done by default only at the center of field. This can be
 changed in `~muse_psfr.compute_psf_from_sparta` with the *npsflin* parameter.
 
-Altitude of the ground and high layers ?
-----------------------------------------
-
-FIXME: shall we describe this?
 
 Usage
 =====
