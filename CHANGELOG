@@ -1,13 +1,20 @@
-1.0.rc2
--------
+1.0 (xx/xx/2020)
+----------------
+
+- Documentation and other minor updates.
+- Add verbose parameter to ``compute_psf`` and ``compute_psf_from_sparta``.
+- Remove deprecated function ``reconstruct_psf``.
+
+1.0.rc2 (09/07/2019)
+--------------------
 
 - Add ``--version`` for the script.
 - Use logging for all terminal outputs.
 
-1.0.rc1
--------
+1.0.rc1 (31/01/2019)
+--------------------
 
-- Skip sparta row when L0<10 or L0>30.
+- Skip SPARTA row when L0<10 or L0>30.
 - Merge individual Moffat fits in one table.
 - Add command-line options (``--plot``, ``--outfile``).
 - Add documentation.
