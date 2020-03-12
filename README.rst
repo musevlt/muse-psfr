@@ -9,10 +9,16 @@ The MUSE-PSFR code allows to reconstruct a PSF for the `MUSE WFM-AO
 using telemetry data from `SPARTA
 <https://www.eso.org/sci/facilities/develop/ao/tecno/sparta.html>`_.
 
-The method will be presented in more details in a forthcoming publication
-([Fusco et al. in prep.]).
+Citation
+--------
 
-Links:
+The method is presented in the following publication:
+`Fusco et al., A&A, 2020, in press <https://doi.org/10.1051/0004-6361/202037595>`_
+
+
+Links
+-----
+
 
 - `Documentation <https://muse-psfr.readthedocs.io/>`_
 - `PyPI <https://pypi.org/project/muse-psfr/>`_
