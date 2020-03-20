@@ -997,8 +997,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     nl : int
         Number of wavelength planes to reconstruct.
     lbda : array
-        Array of wavelength values. If not given it is computed from lmin, lmax
-        and nl.
+        Array of wavelength values (nm). If not given it is computed from
+        lmin, lmax and nl.
     h : tuple of float
         Altitude of the ground and high layers (m).
     n_jobs : int
@@ -1010,7 +1010,7 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         If True (default), compute the mean seeing, GL and L0 over the
         4 lasers. Otherwise a PSF is reconstructed for each laser.
     verbose : bool
-        If True (default), log informations
+        If True (default), print more information.
 
     """
     try:
@@ -1035,7 +1035,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         lbda = np.linspace(lmin, lmax, nl)
 
     if verbose:
-        logger.info('Processing SPARTA table with %d values, njobs=%d ...', nrows, n_jobs)
+        logger.info('Processing SPARTA table with %d values, njobs=%d ...',
+                    nrows, n_jobs)
 
     for irow, row in enumerate(tbl, start=1):
         # use the mean value for the 4 LGS for the seeing, GL, and L0
@@ -1065,12 +1066,14 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
         if mean_of_lgs:
             seeing, GL, L0 = values[check_non_null_laser].mean(axis=0)
             laser_idx.append(-1)
-            to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode, verbose))
+            to_compute.append((lbda, seeing, GL, L0, npsflin, h,
+                               three_lgs_mode, verbose))
         else:
             for i in np.where(check_non_null_laser)[0]:
                 seeing, GL, L0 = values[i]
                 laser_idx.append(i + 1)
-                to_compute.append((lbda, seeing, GL, L0, npsflin, h, three_lgs_mode, verbose))
+                to_compute.append((lbda, seeing, GL, L0, npsflin, h,
+                                   three_lgs_mode, verbose))
 
     if len(to_compute) == 0:
         logger.warning('No valid values')
