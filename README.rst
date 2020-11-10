@@ -13,7 +13,7 @@ Citation
 --------
 
 The method is presented in the following publication:
-`Fusco et al., A&A, 2020, in press <https://doi.org/10.1051/0004-6361/202037595>`_
+`Fusco et al., A&A, 2020 <https://doi.org/10.1051/0004-6361/202037595>`_
 
 
 Links
