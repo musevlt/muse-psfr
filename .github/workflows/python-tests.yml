@@ -18,13 +18,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python: '3.7'
+            python-version: '3.7'
             tox_env: 'py37'
           - os: ubuntu-latest
-            python: '3.8'
+            python-version: '3.8'
             tox_env: 'py38'
           - os: ubuntu-latest
-            python: '3.9'
+            python-version: '3.9'
             tox_env: 'py39'
 
     steps:
