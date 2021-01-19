@@ -1,5 +1,5 @@
-.. image:: https://travis-ci.org/musevlt/muse-psfr.svg?branch=master
-  :target: https://travis-ci.org/musevlt/muse-psfr
+.. image:: https://github.com/musevlt/muse-psfr/workflows/Run%20unit%20tests/badge.svg
+  :target: https://github.com/musevlt/muse-psfr
 
 .. image:: https://codecov.io/gh/musevlt/muse-psfr/branch/master/graph/badge.svg
   :target: https://codecov.io/gh/musevlt/muse-psfr
