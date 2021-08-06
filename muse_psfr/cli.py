@@ -65,6 +65,8 @@ def main(args=None):
     if res:
         data = res['FIT_MEAN'].data
         lbda, fwhm, beta = data['lbda'], data['fwhm'][:, 0], data['n']
+        hdr = res['FIT_MEAN'].header
+        seeing, gl, l0 = hdr['SEEING'], hdr['GL'], hdr['L0']        
     else:
         sys.exit('No results')
 
@@ -72,6 +74,7 @@ def main(args=None):
     if header_line:
         f.write(header_line + '\n')
     f.write('-' * 68 + '\n')
+    f.write(f"Sparta Seeing: {seeing:.2f} arcsec GL: {gl:.2f} L0:{l0:.2f} m\n")
 
     try:
         import colorama  # noqa

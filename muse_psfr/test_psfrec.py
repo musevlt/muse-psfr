@@ -120,6 +120,7 @@ def test_script(tmpdir, caplog):
 
     assert lines[2:] == [
         '--------------------------------------------------------------------',
+        'Sparta Seeing: 1.00 arcsec GL: 0.70 L0:25.00 m',
         'LBDA 5000 7000 9000',
         'FWHM 0.85 0.73 0.62',
         'BETA 2.73 2.55 2.23',
@@ -127,20 +128,20 @@ def test_script(tmpdir, caplog):
     ]
     # sometimes this includes DEBUG logs, sometimes not .... not sure why
     records = [r for r in caplog.records if r.levelname != 'DEBUG']
-    assert records[5].message == 'LBDA 5000 7000 9000'
-    assert records[6].message == 'FWHM 0.85 0.73 0.62'
-    assert records[7].message == 'BETA 2.73 2.55 2.23'
+    assert records[6].message == 'LBDA 5000 7000 9000'
+    assert records[7].message == 'FWHM 0.85 0.73 0.62'
+    assert records[8].message == 'BETA 2.73 2.55 2.23'
 
     # with colors and values
     caplog.clear()
     main(['--values', '1,0.7,25'])
     records = [r for r in caplog.records if r.levelname != 'DEBUG']
-    assert 'LBDA' in records[5].message
-    assert 'FWHM' in records[6].message
-    assert 'BETA' in records[7].message
-    assert '7000' in records[5].message
-    assert '0.73' in records[6].message
-    assert '2.55' in records[7].message
+    assert 'LBDA' in records[6].message
+    assert 'FWHM' in records[7].message
+    assert 'BETA' in records[8].message
+    assert '7000' in records[6].message
+    assert '0.73' in records[7].message
+    assert '2.55' in records[8].message
 
 
 def test_script_with_file(tmpdir):
@@ -161,6 +162,7 @@ def test_script_with_file(tmpdir):
     assert lines[2:] == [
         'OB None None Airmass 0.00-0.00',
         '--------------------------------------------------------------------',
+        'Sparta Seeing: 1.00 arcsec GL: 0.70 L0:25.00 m',
         'LBDA 5000 7000 9000',
         'FWHM 0.85 0.73 0.62',
         'BETA 2.73 2.55 2.23',

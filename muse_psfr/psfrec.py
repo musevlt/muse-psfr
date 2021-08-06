@@ -1103,8 +1103,8 @@ def compute_psf_from_sparta(filename, extname='SPARTA_ATM_DATA', npsflin=1,
     # compute the mean PSF and store PSF and fit parameters
     psftot = np.mean(psftot, axis=0)
     res = fit_psf_cube(lbda, Cube(data=psftot, copy=False))
-    # and store the mean seeing, gl and L0
-    seeing, GL, L0 = np.mean(stats, axis=0)
+    # and store the median seeing, gl and L0
+    seeing, GL, L0 = np.median(stats, axis=0)    
     res.meta.update({'SEEING': seeing, 'GL': GL, 'L0': L0})
 
     hdu = fits.table_to_hdu(res)
