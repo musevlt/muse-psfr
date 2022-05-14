@@ -13,12 +13,5 @@ def _setup_logging():
 
 _setup_logging()
 
-from pkg_resources import DistributionNotFound, get_distribution  # noqa
-
 from .psfrec import *  # noqa
-
-try:
-    __version__ = get_distribution(__name__).version
-except DistributionNotFound:  # pragma: no cover
-    # package is not installed
-    pass
+from .version import version as __version__  # noqa

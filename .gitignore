@@ -15,3 +15,4 @@ api/
 build/
 docs/_build
 htmlcov/
+muse_psfr/version.py
